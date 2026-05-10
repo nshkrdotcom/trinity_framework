@@ -1,7 +1,13 @@
+unless Code.ensure_loaded?(DependencySources) do
+  Code.require_file("build_support/dependency_sources.exs", __DIR__)
+end
+
 Code.require_file("build_support/workspace_contract.exs", __DIR__)
 
 defmodule TrinityFramework.MixProject do
   use Mix.Project
+
+  alias TrinityFramework.Build.WorkspaceContract
 
   @version "0.1.0"
   @source_url "https://github.com/nshkrdotcom/trinity_framework"
@@ -20,7 +26,7 @@ defmodule TrinityFramework.MixProject do
       description: "Reusable TRINITY router and coordination framework",
       source_url: @source_url,
       homepage_url: @source_url,
-      package_paths: TrinityFramework.Build.WorkspaceContract.package_paths()
+      package_paths: WorkspaceContract.package_paths()
     ]
   end
 
@@ -40,12 +46,13 @@ defmodule TrinityFramework.MixProject do
   end
 
   defp deps do
-    [
-      {:weld, "~> 0.8.1", only: [:dev, :test], runtime: false},
-      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
-      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
-      {:ex_doc, "~> 0.40.1", only: [:dev, :test], runtime: false}
-    ]
+    DependencySources.deps(__DIR__) ++
+      [
+        {:weld, "~> 0.8.1", only: [:dev, :test], runtime: false},
+        {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+        {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
+        {:ex_doc, "~> 0.40.1", only: [:dev, :test], runtime: false}
+      ]
   end
 
   defp aliases do

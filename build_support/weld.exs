@@ -3,11 +3,13 @@ Code.require_file("workspace_contract.exs", __DIR__)
 defmodule TrinityFramework.Build.WeldContract do
   @moduledoc false
 
+  alias TrinityFramework.Build.WorkspaceContract
+
   def manifest do
     [
       workspace: [
         root: "..",
-        project_globs: TrinityFramework.Build.WorkspaceContract.active_project_globs()
+        project_globs: WorkspaceContract.active_project_globs()
       ],
       classify: [
         tooling: ["."]

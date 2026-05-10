@@ -2,6 +2,7 @@
 /deps/
 /doc/
 /dist/
+/.dependency_sources.local.exs
 /*.ez
 /erl_crash.dump
 /cover/
