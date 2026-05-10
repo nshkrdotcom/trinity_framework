@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200" role="img" aria-labelledby="title desc">
+  <title id="title">TRINITY Framework</title>
+  <desc id="desc">Hexagonal TRINITY router mark with layered routing paths and provider nodes.</desc>
+  <defs>
+    <linearGradient id="tf-edge" x1="34" y1="28" x2="166" y2="172" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8b5cf6"/>
+      <stop offset="0.52" stop-color="#2563eb"/>
+      <stop offset="1" stop-color="#14b8a6"/>
+    </linearGradient>
+    <radialGradient id="tf-core" cx="50%" cy="44%" r="58%">
+      <stop offset="0" stop-color="#f8fafc"/>
+      <stop offset="0.36" stop-color="#dbeafe"/>
+      <stop offset="1" stop-color="#0f172a"/>
+    </radialGradient>
+    <filter id="tf-glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="3.2" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.20 0 0 0 0 0.38 0 0 0 0 1 0 0 0 .78 0" result="glow"/>
+      <feMerge>
+        <feMergeNode in="glow"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <clipPath id="tf-clip">
+      <path d="M100 9 178.8 54.5v91L100 191l-78.8-45.5v-91Z"/>
+    </clipPath>
+  </defs>
+  <path d="M100 9 178.8 54.5v91L100 191l-78.8-45.5v-91Z" fill="url(#tf-core)" stroke="url(#tf-edge)" stroke-width="7" stroke-linejoin="round"/>
+  <g clip-path="url(#tf-clip)">
+    <path d="M20 144c31-18 51-18 80 0s49 18 80 0" fill="none" stroke="#38bdf8" stroke-width="2.4" opacity=".46"/>
+    <path d="M16 62c36 19 54 19 84 0s48-19 84 0" fill="none" stroke="#a78bfa" stroke-width="2.4" opacity=".38"/>
+    <g filter="url(#tf-glow)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M100 54v37" stroke="#f8fafc" stroke-width="5.5"/>
+      <path d="M100 91 66 125" stroke="#67e8f9" stroke-width="5.5"/>
+      <path d="M100 91 134 125" stroke="#c4b5fd" stroke-width="5.5"/>
+      <path d="M66 125h68" stroke="#5eead4" stroke-width="5.5"/>
+      <path d="M78 73c10-11 34-11 44 0" stroke="#f8fafc" stroke-width="3.2" opacity=".9"/>
+      <path d="M62 109c-8 7-8 19 0 26" stroke="#67e8f9" stroke-width="3.2" opacity=".9"/>
+      <path d="M138 109c8 7 8 19 0 26" stroke="#c4b5fd" stroke-width="3.2" opacity=".9"/>
+    </g>
+    <g>
+      <circle cx="100" cy="54" r="12" fill="#0f172a" stroke="#f8fafc" stroke-width="4"/>
+      <circle cx="66" cy="125" r="12" fill="#0f172a" stroke="#67e8f9" stroke-width="4"/>
+      <circle cx="134" cy="125" r="12" fill="#0f172a" stroke="#c4b5fd" stroke-width="4"/>
+      <circle cx="100" cy="91" r="15" fill="#172554" stroke="#5eead4" stroke-width="4"/>
+      <circle cx="100" cy="91" r="5" fill="#f8fafc"/>
+    </g>
+    <path d="M38 151h124" stroke="#f8fafc" stroke-width="1.2" opacity=".3"/>
+    <path d="M45 49h110" stroke="#f8fafc" stroke-width="1.2" opacity=".28"/>
+  </g>
+</svg>

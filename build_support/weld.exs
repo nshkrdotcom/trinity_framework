@@ -32,7 +32,7 @@ defmodule TrinityFramework.Build.WeldContract do
       ],
       output: [
         docs: ["README.md"],
-        assets: []
+        assets: ["assets/trinity_framework.svg"]
       ],
       verify: [
         artifact_tests: ["test"],
