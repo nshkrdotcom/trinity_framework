@@ -9,7 +9,7 @@ generated code must remain regex-free, dynamic-atom-free, and ambient-env-free.
 Use fixed-string scans and structured validators.
 
 This repo is an existing Weld consumer. Keep Weld on the current published Hex
-line, `{:weld, "~> 0.8.1", only: [:dev, :test], runtime: false}`, and do not
+line, `{:weld, "~> 0.8.2", only: [:dev, :test], runtime: false}`, and do not
 replace it with a path dependency in committed steady state.
 Weld checks helper drift, dependency-source manifests, clone/publish checks, and
 publish order for this repo.
