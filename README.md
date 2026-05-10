@@ -5,7 +5,7 @@
 <p align="center">
   <a href="https://github.com/nshkrdotcom/trinity_framework"><img alt="GitHub" src="https://img.shields.io/badge/github-nshkrdotcom%2Ftrinity__framework-24292f?logo=github" /></a>
   <img alt="Elixir" src="https://img.shields.io/badge/elixir-1.17%2B-4b275f?logo=elixir" />
-  <img alt="Weld" src="https://img.shields.io/badge/weld-0.8.0-2563eb" />
+  <img alt="Weld" src="https://img.shields.io/badge/weld-0.8.1-2563eb" />
   <img alt="License" src="https://img.shields.io/badge/license-MIT-0f766e" />
 </p>
 
