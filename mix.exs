@@ -51,7 +51,19 @@ defmodule TrinityFramework.MixProject do
         {:weld, "~> 0.8.2", only: [:dev, :test], runtime: false},
         {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
         {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
-        {:ex_doc, "~> 0.40.1", only: [:dev, :test], runtime: false}
+        {:ex_doc, "~> 0.40.1", only: [:dev, :test], runtime: false},
+
+        # Deconstructed Sub-packages
+        {:trinity_contracts, path: "core/trinity_contracts"},
+        {:trinity_coordinator_core, path: "core/trinity_coordinator_core"},
+        {:trinity_sakana_contracts, path: "core/trinity_sakana_contracts"},
+        {:trinity_sakana_pipeline, path: "core/trinity_sakana_pipeline"},
+        {:trinity_bridge_self_hosted_inference, path: "bridges/trinity_bridge_self_hosted_inference"},
+        {:trinity_bridge_inference, path: "bridges/trinity_bridge_inference"},
+        {:trinity_bridge_trace, path: "bridges/trinity_bridge_trace"},
+        {:trinity_single_node, path: "apps/trinity_single_node"},
+        {:trinity_ops, path: "tools/trinity_ops"},
+        {:qwen_router_prompt_eval, path: "examples/qwen_router_prompt_eval"}
       ]
   end
 

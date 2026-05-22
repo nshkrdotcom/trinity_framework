@@ -1,0 +1,10 @@
+# Build directories
+/_build
+/deps
+/doc
+/.elixir_ls
+/erl_crash.dump
+/cov
+/.elixir_ls/
+*.swp
+*~
