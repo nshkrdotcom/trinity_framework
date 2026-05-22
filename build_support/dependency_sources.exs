@@ -194,6 +194,8 @@ defmodule DependencySources do
     path =
       if is_list(path), do: Enum.find(path, &File.exists?(Path.expand(&1, repo_root))), else: path
 
+    path = Path.expand(path, repo_root)
+
     {app, Keyword.merge([path: path], dep_options(config, extra_opts))}
   end
 

@@ -46,7 +46,7 @@ defmodule TrinityFramework.MixProject do
   end
 
   defp deps do
-    DependencySources.deps(__DIR__) ++
+    external_deps() ++
       [
         {:weld, "~> 0.8.2", only: [:dev, :test], runtime: false},
         {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
@@ -58,7 +58,8 @@ defmodule TrinityFramework.MixProject do
         {:trinity_coordinator_core, path: "core/trinity_coordinator_core"},
         {:trinity_sakana_contracts, path: "core/trinity_sakana_contracts"},
         {:trinity_sakana_pipeline, path: "core/trinity_sakana_pipeline"},
-        {:trinity_bridge_self_hosted_inference, path: "bridges/trinity_bridge_self_hosted_inference"},
+        {:trinity_bridge_self_hosted_inference,
+         path: "bridges/trinity_bridge_self_hosted_inference"},
         {:trinity_bridge_inference, path: "bridges/trinity_bridge_inference"},
         {:trinity_bridge_trace, path: "bridges/trinity_bridge_trace"},
         {:trinity_single_node, path: "apps/trinity_single_node"},
@@ -66,6 +67,23 @@ defmodule TrinityFramework.MixProject do
         {:qwen_router_prompt_eval, path: "examples/qwen_router_prompt_eval"}
       ]
   end
+
+  defp external_deps do
+    [
+      dep(:crucible_safetensors),
+      dep(:crucible_factorization),
+      dep(:crucible_tensor_patch),
+      dep(:crucible_model_registry),
+      dep(:self_hosted_inference_core),
+      dep(:self_hosted_inference_bumblebee),
+      dep(:execution_plane),
+      dep(:execution_plane_process),
+      dep(:inference),
+      dep(:aitrace)
+    ]
+  end
+
+  defp dep(app), do: DependencySources.dep(app, __DIR__, override: true)
 
   defp aliases do
     [
