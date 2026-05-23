@@ -27,6 +27,30 @@ defmodule TrinityFramework.Build.WeldContract do
                             :self_hosted_inference_bumblebee
                           ])
 
+  @artifact_docs [
+    "README.md",
+    "guides/onboarding.md",
+    "guides/system_architecture.md",
+    "guides/operations_qc.md",
+    "guides/artifact_distribution.md",
+    "guides/artifacts_and_export.md",
+    "guides/runtime_profiles.md",
+    "guides/evals.md",
+    "guides/python_parity_reconstruction.md",
+    "guides/stage_checks_and_tolerances.md",
+    "guides/svd_generation_runbook.md",
+    "guides/provider_service_hardening.md",
+    "guides/troubleshooting.md"
+  ]
+
+  @artifact_assets [
+    "assets/trinity_framework.svg",
+    "LICENSE",
+    "priv/sakana_trinity/artifact_pin.json",
+    "priv/sakana_trinity/reference/sakana_python_reference_manifest.json",
+    "examples/qwen_router_prompt_eval/fixtures"
+  ]
+
   def manifest do
     [
       workspace: [
@@ -56,8 +80,8 @@ defmodule TrinityFramework.Build.WeldContract do
         description: "Reusable TRINITY router and coordination framework"
       ],
       output: [
-        docs: ["README.md"],
-        assets: ["assets/trinity_framework.svg"]
+        docs: @artifact_docs,
+        assets: @artifact_assets
       ],
       verify: [
         artifact_tests: ["test"],
