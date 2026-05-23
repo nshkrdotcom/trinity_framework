@@ -3,7 +3,7 @@ defmodule Trinity.Ops.Tasks do
   Dispatch layer for the `mix trinity.*` task modules.
   """
 
-  alias Trinity.Ops.{CommandSpec, Forwarder, Gates}
+  alias Trinity.Ops.{CommandSpec, Gates}
 
   @forwarded_tasks [
     :trinity_artifact_fetch,
@@ -40,7 +40,22 @@ defmodule Trinity.Ops.Tasks do
 
   def run(task_key, argv) when task_key in @forwarded_tasks do
     _opts = CommandSpec.parse!(task_key, argv)
-    Forwarder.forward!(task_key, argv)
+    unsupported_task!(task_key)
+  end
+
+  defp unsupported_task!(task_key) do
+    if Application.get_env(:trinity_ops, :allow_unported_task_success, false) do
+      Mix.shell().error("#{CommandSpec.task_name!(task_key)} is not yet framework-native")
+      :ok
+    else
+      Mix.raise("""
+      #{CommandSpec.task_name!(task_key)} is no longer forwarded to trinity_coordinator.
+
+      Phase 16 retired trinity_coordinator as the command owner. Use the framework
+      package APIs directly while the remaining heavy operator task bodies are
+      completed in tools/trinity_ops.
+      """)
+    end
   end
 
   defp check_requirement!("cuda") do
