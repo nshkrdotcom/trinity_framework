@@ -16,7 +16,7 @@ defmodule Trinity.SakanaPipeline.MixProject do
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       aliases: aliases(),
-      dialyzer: [plt_add_deps: :apps_direct],
+      dialyzer: [plt_add_deps: :apps_direct, plt_add_apps: [:nx]],
       docs: docs()
     ]
   end
@@ -42,6 +42,7 @@ defmodule Trinity.SakanaPipeline.MixProject do
     [
       {:trinity_contracts, path: "../trinity_contracts"},
       {:trinity_sakana_contracts, path: "../trinity_sakana_contracts"},
+      {:jason, "~> 1.4"},
       dep(:crucible_safetensors),
       dep(:crucible_factorization),
       dep(:crucible_tensor_patch),
