@@ -19,12 +19,14 @@ defmodule Trinity.SakanaContracts.Boundary.NoLibOsEnvTest do
     out
     |> String.split("\n", trim: true)
     |> Enum.filter(&(String.ends_with?(&1, ".ex") or String.ends_with?(&1, ".exs")))
-    |> Enum.flat_map(fn path ->
-      body = File.read!(path)
+    |> Enum.flat_map(&forbidden_hits_in_file/1)
+  end
 
-      Enum.flat_map(@forbidden, fn token ->
-        if String.contains?(body, token), do: [{path, token}], else: []
-      end)
-    end)
+  defp forbidden_hits_in_file(path) do
+    body = File.read!(path)
+
+    @forbidden
+    |> Enum.filter(&String.contains?(body, &1))
+    |> Enum.map(&{path, &1})
   end
 end
