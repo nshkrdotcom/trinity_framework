@@ -4,8 +4,9 @@ defmodule Trinity.SingleNode.OptInIntegrationTest do
   alias Trinity.SingleNode
   alias Trinity.SingleNode.Config
 
-  @cases_path "/home/home/p/g/n/trinity_coordinator/examples/fixtures/qwen_router_prompt_eval_cases.json"
-  @snapshot_path "/home/home/p/g/n/trinity_coordinator/examples/fixtures/qwen_router_prompt_eval_logits.json"
+  @fixtures_root Path.expand("../../../../../examples/qwen_router_prompt_eval/fixtures", __DIR__)
+  @cases_path Path.join(@fixtures_root, "qwen_router_prompt_eval_cases.json")
+  @snapshot_path Path.join(@fixtures_root, "qwen_router_prompt_eval_logits.json")
 
   @tag :single_node_full
   test "host_exla single-node full path matches a three-case coordinator subset" do

@@ -18,7 +18,9 @@ defmodule Trinity.Ops.Boundary.NoLibOsEnvTest do
 
     out
     |> String.split("\n", trim: true)
-    |> Enum.filter(&(String.ends_with?(&1, ".ex") or String.ends_with?(&1, ".exs")))
+    |> Enum.filter(fn path ->
+      File.regular?(path) and (String.ends_with?(path, ".ex") or String.ends_with?(path, ".exs"))
+    end)
     |> Enum.flat_map(&file_hits/1)
   end
 

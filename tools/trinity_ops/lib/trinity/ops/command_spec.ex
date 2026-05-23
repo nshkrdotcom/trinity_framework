@@ -12,7 +12,10 @@ defmodule Trinity.Ops.CommandSpec do
         task: "trinity.artifact.fetch",
         switches: [pin: :string, dest: :string, offline: :boolean, help: :boolean]
       },
-      trinity_demo: %{task: "trinity.demo", switches: []},
+      trinity_demo: %{
+        task: "trinity.demo",
+        switches: route_demo_switches()
+      },
       trinity_env_check: %{
         task: "trinity.env.check",
         switches: [artifact_dir: :string, require: :string],
@@ -71,30 +74,7 @@ defmodule Trinity.Ops.CommandSpec do
       },
       trinity_route_demo: %{
         task: "trinity.route.demo",
-        switches: [
-          allow_live: :boolean,
-          artifact_dir: :string,
-          runtime_profile: :string,
-          governed_api_key: :string,
-          governed_authority_ref: :string,
-          governed_base_url: :string,
-          governed_credential_ref: :string,
-          governed_model: :string,
-          governed_provider: :string,
-          governed_provider_pool_ref: :string,
-          governed_runtime_ref: :string,
-          governed_workflow_ref: :string,
-          max_turns: :integer,
-          message: :string,
-          mock: :boolean,
-          mock_provider: :boolean,
-          openai_api_key: :string,
-          profile: :string,
-          provider_pool: :string,
-          run_id: :string,
-          trace_content: :string,
-          trace_out: :string
-        ]
+        switches: route_demo_switches()
       },
       trinity_sakana_export_adapted: %{
         task: "trinity.sakana.export_adapted",
@@ -181,6 +161,33 @@ defmodule Trinity.Ops.CommandSpec do
 
   @spec task_name!(task_key()) :: String.t()
   def task_name!(task_key), do: Map.fetch!(all(), task_key).task
+
+  defp route_demo_switches do
+    [
+      allow_live: :boolean,
+      artifact_dir: :string,
+      runtime_profile: :string,
+      governed_api_key: :string,
+      governed_authority_ref: :string,
+      governed_base_url: :string,
+      governed_credential_ref: :string,
+      governed_model: :string,
+      governed_provider: :string,
+      governed_provider_pool_ref: :string,
+      governed_runtime_ref: :string,
+      governed_workflow_ref: :string,
+      max_turns: :integer,
+      message: :string,
+      mock: :boolean,
+      mock_provider: :boolean,
+      openai_api_key: :string,
+      profile: :string,
+      provider_pool: :string,
+      run_id: :string,
+      trace_content: :string,
+      trace_out: :string
+    ]
+  end
 
   @spec parse!(task_key(), [String.t()]) :: keyword()
   def parse!(task_key, argv) do

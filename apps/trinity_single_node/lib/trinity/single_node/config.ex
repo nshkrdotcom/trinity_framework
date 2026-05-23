@@ -4,7 +4,7 @@ defmodule Trinity.SingleNode.Config do
   """
 
   @default_artifact_root Path.expand(
-                           "../../../../../../trinity_coordinator/priv/sakana_trinity/adapted_qwen3_0_6b_layer26",
+                           "../../../../../priv/sakana_trinity/adapted_qwen3_0_6b_layer26",
                            __DIR__
                          )
 

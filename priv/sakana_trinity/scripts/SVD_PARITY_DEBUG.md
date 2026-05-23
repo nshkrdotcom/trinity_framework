@@ -1,0 +1,183 @@
+# Sakana SVD hash parity debug flow
+
+Run from the repository root.
+
+## 1. Emit the Python-side checkpoint report
+
+```bash
+python3 priv/sakana_trinity/scripts/debug_sakana_parity_sample.py \
+  --model-torch-dtype float32 \
+  --out tmp/sakana_parity/python_sample_trace.json \
+  --write-components-dir tmp/sakana_parity/python_components
+```
+
+This writes:
+
+- `tmp/sakana_parity/python_sample_trace.json`
+- `tmp/sakana_parity/python_components/trinity_svf_components.safetensors`
+- `tmp/sakana_parity/python_components/trinity_svf_scale_offsets.safetensors`
+- `tmp/sakana_parity/python_components/trinity_svf_debug_manifest.json`
+- `tmp/sakana_parity/python_components/trinity_svf_stage_debug.safetensors`
+
+The report separates three concepts:
+
+- **stored reference hash**: the historical value in `sakana_python_reference_manifest.json`;
+- **current Python recomputation hash**: the value produced by the current Python/PyTorch environment;
+- **Python safetensors readback hash**: the value produced after reading back the
+  exact component files that Elixir consumes.
+
+If the script prints `reference_hash_reproducible: False`, do **not** expect Elixir
+or freshly recomputed Python SVD components to match the stored `600be6...` hash.
+That means the stored hash is provenance-sensitive to the original SVD component
+basis.
+
+The readback variant is the decisive export check. If
+`python_safetensors_readback_torch_v_final_bf16` matches the recomputed Python
+variant, the component files are not the cause of an Elixir mismatch.
+
+The stage tensor bundle is the side-by-side correctness contract. It contains
+source tensor bytes, offsets, scaled singular values, normalization,
+reconstruction tensors, and final `bf16` bytes from Python safetensors readback.
+Use it to isolate the first stage where Elixir stops byte-matching Python.
+
+## 1a. Strict historical reproduction, when original SVD weights are available
+
+If you have the original Python `svd_weights.pt`, run:
+
+```bash
+python3 priv/sakana_trinity/scripts/debug_sakana_parity_sample.py \
+  --model-torch-dtype float32 \
+  --svd-weights path/to/svd_weights.pt \
+  --strict-reference-hash \
+  --out tmp/sakana_parity/python_sample_trace.json \
+  --write-components-dir tmp/sakana_parity/python_components
+```
+
+Only use strict stored-reference assertions after the Python report itself says
+`reference_hash_reproducible: True`.
+
+## 2. Emit the Elixir-side checkpoint report
+
+```bash
+XLA_TARGET=cuda12 mix trinity.sakana.parity_sample \
+  --semantic-only \
+  --device-semantic-only \
+  --preferred-layout-only \
+  --source-from-python-stage \
+  --components-dir tmp/sakana_parity/python_components \
+  --python-report tmp/sakana_parity/python_sample_trace.json \
+  --stage-dir tmp/sakana_parity/elixir_stages \
+  --out tmp/sakana_parity/elixir_sample_trace.json
+```
+
+`--semantic-only` skips native `Nx.LinAlg.svd/2` diagnostics and avoids the
+long CUDA SVD compilation path while debugging Python-component parity. The
+extra flags are the fast sample loop:
+
+- `--source-from-python-stage` reads Python's serialized `stage.source_f32`
+  instead of loading Qwen only to recover the sample source tensor.
+- `--preferred-layout-only` skips the already-known-wrong `nx`/`vh` layout
+  diagnostics.
+- `--device-semantic-only` runs the one required reconstruction through EXLA and
+  avoids a large host CPU matrix multiply.
+
+Omit these extra flags only when you specifically need native Nx SVD,
+wrong-layout diagnostics, host/backend comparisons, or full Qwen source loading.
+
+The Elixir tracer snapshots intermediate tensors to `Nx.BinaryBackend` before
+reconstruction so EXLA donated buffers cannot crash the report. Semantic
+variants include both the final `bf16` tensor summary and a
+`final_f32_before_bf16` summary so formula/accumulation differences can be
+separated from final byte-hash rounding.
+
+With `--stage-dir`, the Elixir tracer writes a file named for the selected
+compute target, for example:
+
+- `tmp/sakana_parity/elixir_stages/trinity_svf_elixir_stage_device_exla_backend_client_cuda_torch_v.safetensors`
+
+It also embeds stage checks in the Elixir JSON report when the Python report
+points at a Python stage bundle. The `torch_v` semantic path is the
+functional-parity target because it consumes the exact Python `U/S/V` components
+and avoids native SVD basis differences.
+
+Native variants are expected to differ when the SVD basis differs. Semantic
+Python-component variants isolate formula, V/Vh layout, orientation, framework
+GEMM accumulation behavior, final `bf16` cast, raw-byte hashing, and compute
+backend. Exact `bf16` hashes can still differ across PyTorch and Nx/EXLA when a
+large fp32 matmul accumulates differently; use zero-offset error and pre-bf16
+summaries to decide whether the formula is correct before treating a hash
+mismatch as a porting bug.
+
+## 3. Compare both reports
+
+```bash
+python3 priv/sakana_trinity/scripts/compare_sakana_parity_reports.py \
+  tmp/sakana_parity/python_sample_trace.json \
+  tmp/sakana_parity/elixir_sample_trace.json
+```
+
+For the rigorous functional gate:
+
+```bash
+python3 priv/sakana_trinity/scripts/compare_sakana_parity_reports.py \
+  --strict-stage-tolerances \
+  tmp/sakana_parity/python_sample_trace.json \
+  tmp/sakana_parity/elixir_sample_trace.json
+```
+
+This prints:
+
+- exact-vs-numeric stage status for every compared stage;
+- the first practical byte-match failure surface;
+- whether all required stages pass their declared tolerances;
+- top differing flat indices and values for large stage tensors.
+
+Current interpretation rules:
+
+- `stage.source_f32`, `stage.offsets_f32`, and `stage.scaled_s` should
+  byte-match.
+- `stage.normalization`, `stage.zero_source_f32`,
+  `stage.adapted_source_f32`, and `stage.final_f32` must pass numeric
+  tolerances.
+- `stage.final_bf16` byte equality is aspirational. A final `bf16` mismatch is
+  not a functional failure when all required f32 stages pass.
+
+For opt-in exact checks:
+
+```bash
+python3 priv/sakana_trinity/scripts/compare_sakana_parity_reports.py \
+  --strict-reference \
+  tmp/sakana_parity/python_sample_trace.json \
+  tmp/sakana_parity/elixir_sample_trace.json
+```
+
+or:
+
+```bash
+python3 priv/sakana_trinity/scripts/compare_sakana_parity_reports.py \
+  --strict-current-python \
+  tmp/sakana_parity/python_sample_trace.json \
+  tmp/sakana_parity/elixir_sample_trace.json
+```
+
+## 4. Run the framework parity sample with diagnostics enabled
+
+```bash
+XLA_TARGET=cuda12 mix trinity.sakana.parity_sample \
+  --python-report tmp/sakana_parity/python_sample_trace.json \
+  --components-dir tmp/sakana_parity/python_components \
+  --stage-dir tmp/sakana_parity/elixir_stages \
+  --out tmp/sakana_parity/elixir_sample_trace.json
+```
+
+Default behavior verifies shapes, offsets, zero-offset reconstruction sanity, and
+Python-component V-layout handling without requiring a non-reproducible stored
+hash. Strict byte-level checks are explicit:
+
+- `TRINITY_STRICT_REFERENCE_HASH=1` requires a semantic component variant to
+  match the stored manifest hash. Use only after Python itself reproduces it.
+- `TRINITY_STRICT_CURRENT_PYTHON_HASH=1` requires a semantic component variant
+  to match the current Python baseline hash.
+- `TRINITY_STRICT_NATIVE_SVD_HASH=1` requires native Nx SVD to match the stored
+  Python hash. This is expected to fail when native SVD produces a different but
+  valid singular-vector basis.

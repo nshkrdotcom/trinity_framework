@@ -2,7 +2,12 @@
 /deps/
 /doc/
 /dist/
+/tmp/
 /.dependency_sources.local.exs
 /*.ez
 /erl_crash.dump
 /cover/
+/core/trinity_sakana_pipeline/tmp/
+/tools/trinity_ops/tmp/
+/priv/sakana_trinity/adapted_qwen3_0_6b_layer26/
+/priv/sakana_trinity/scripts/__pycache__/

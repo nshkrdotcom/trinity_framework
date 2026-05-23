@@ -128,7 +128,7 @@ defmodule Trinity.SingleNode.Examples.MockOrchestrationTrace do
 
   defp default_artifact_dir do
     Path.expand(
-      "../../../../trinity_coordinator/priv/sakana_trinity/adapted_qwen3_0_6b_layer26",
+      "../../../priv/sakana_trinity/adapted_qwen3_0_6b_layer26",
       __DIR__
     )
   end

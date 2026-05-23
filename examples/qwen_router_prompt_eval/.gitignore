@@ -2,6 +2,7 @@
 /_build
 /deps
 /doc
+/tmp
 /.elixir_ls
 /erl_crash.dump
 /cov

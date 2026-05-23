@@ -1,0 +1,221 @@
+defmodule Trinity.Ops.NativeTasksTest do
+  use ExUnit.Case, async: false
+
+  alias Trinity.Ops.Tasks
+
+  test "route demo runs through the framework single-node mock path" do
+    trace_path = tmp_path("route_demo.jsonl")
+
+    assert :ok =
+             Tasks.run(:trinity_route_demo, [
+               "--mock-provider",
+               "--runtime-profile",
+               "mock_tiny",
+               "--max-turns",
+               "1",
+               "--trace-out",
+               trace_path
+             ])
+
+    assert trace_events(trace_path) |> Enum.member?("route_selected")
+    assert trace_events(trace_path) |> Enum.member?("provider_called")
+  end
+
+  test "mock loop emits the compatibility trace events" do
+    trace_path = tmp_path("mock_loop.jsonl")
+
+    assert :ok =
+             Tasks.run(:trinity_hitl_mock_loop, [
+               "--runtime-profile",
+               "mock_tiny",
+               "--max-turns",
+               "1",
+               "--trace-out",
+               trace_path
+             ])
+
+    assert trace_events(trace_path) |> Enum.member?("slm_extracted")
+    assert trace_events(trace_path) |> Enum.member?("route_selected")
+    assert trace_events(trace_path) |> Enum.member?("provider_called")
+  end
+
+  test "artifact fetch uses the framework registry pin fetcher" do
+    content = ~s({"artifact":"ok"}\n)
+    sha256 = :crypto.hash(:sha256, content) |> Base.encode16(case: :lower)
+    pin_path = tmp_path("artifact_pin.json")
+    dest = tmp_path("artifact")
+
+    File.write!(
+      pin_path,
+      Jason.encode!(%{
+        version: 1,
+        repo_id: "example/trinity",
+        revision: "test",
+        manifest_sha256: sha256,
+        files: [%{path: "manifest.json", sha256: sha256}]
+      })
+    )
+
+    Process.put(:trinity_artifact_fetch_downloader, fn args ->
+      cache_path = Keyword.fetch!(args, :cache_path)
+      File.mkdir_p!(Path.dirname(cache_path))
+      File.write!(cache_path, content)
+      {:ok, cache_path}
+    end)
+
+    on_exit(fn -> Process.delete(:trinity_artifact_fetch_downloader) end)
+
+    assert :ok =
+             Tasks.run(:trinity_artifact_fetch, [
+               "--pin",
+               pin_path,
+               "--dest",
+               dest
+             ])
+
+    assert File.read!(Path.join(dest, "manifest.json")) == content
+  end
+
+  test "artifact fetch default downloader reads the Hugging Face offline cache" do
+    content = ~s({"artifact":"cached"}\n)
+    sha256 = :crypto.hash(:sha256, content) |> Base.encode16(case: :lower)
+    pin_path = tmp_path("cached_artifact_pin.json")
+    dest = tmp_path("cached_artifact")
+    cache_dir = tmp_path("hf_cache")
+    repo_id = "example/trinity"
+    revision = "test-revision"
+
+    previous_cache_dir = Application.get_env(:hf_hub, :cache_dir)
+    Application.put_env(:hf_hub, :cache_dir, cache_dir)
+
+    on_exit(fn ->
+      restore_hf_cache_dir(previous_cache_dir)
+    end)
+
+    cached_path = HfHub.FS.file_path(repo_id, :dataset, "manifest.json", revision)
+    File.mkdir_p!(Path.dirname(cached_path))
+    File.write!(cached_path, content)
+
+    File.write!(
+      pin_path,
+      Jason.encode!(%{
+        version: 1,
+        repo_id: repo_id,
+        revision: revision,
+        manifest_sha256: sha256,
+        files: [%{path: "manifest.json", sha256: sha256}]
+      })
+    )
+
+    assert :ok =
+             Tasks.run(:trinity_artifact_fetch, [
+               "--pin",
+               pin_path,
+               "--dest",
+               dest,
+               "--offline"
+             ])
+
+    assert File.read!(Path.join(dest, "manifest.json")) == content
+  end
+
+  test "parity check performs strict stage checks without the Python wrapper" do
+    python_path = tmp_path("python_report.json")
+    elixir_path = tmp_path("elixir_report.json")
+    summary_path = tmp_path("summary.json")
+    digest = String.duplicate("a", 64)
+
+    File.write!(
+      python_path,
+      Jason.encode!(%{
+        reference: %{
+          expected_bf16_sha256: digest,
+          current_python_baseline_label: "python",
+          current_python_baseline_bf16_sha256: digest,
+          expected_hash_reproducible: true
+        },
+        variants: [%{label: "python", observed_bf16_sha256: digest}]
+      })
+    )
+
+    File.write!(
+      elixir_path,
+      Jason.encode!(%{
+        reference: %{expected_bf16_sha256: digest},
+        semantic_python_component_variants: [
+          %{
+            label: "elixir",
+            observed_bf16_sha256: digest,
+            stage_debug: %{
+              checks: [
+                %{
+                  stage: "stage.final_bf16",
+                  required_for_functional_parity: true,
+                  functional_passed: true
+                }
+              ]
+            }
+          }
+        ]
+      })
+    )
+
+    assert :ok =
+             Tasks.run(:trinity_parity_check, [
+               "--python-report",
+               python_path,
+               "--elixir-report",
+               elixir_path,
+               "--summary-out",
+               summary_path
+             ])
+
+    assert %{"ok" => true} = Jason.decode!(File.read!(summary_path))
+  end
+
+  test "large tensor chunks writes a bounded semantic chunk report" do
+    python_path = tmp_path("large_python_report.json")
+    out = tmp_path("large_chunks.json")
+
+    File.write!(
+      python_path,
+      Jason.encode!(%{
+        selected_tensors: [
+          %{
+            source_name: "model.embed_tokens.weight",
+            shape: [2048, 1024]
+          }
+        ]
+      })
+    )
+
+    assert :ok =
+             Tasks.run(:trinity_sakana_large_tensor_chunks, [
+               "--python-report",
+               python_path,
+               "--out",
+               out,
+               "--chunk-rows",
+               "1024",
+               "--no-cuda"
+             ])
+
+    assert %{"summary" => %{"chunk_count" => 2}} = Jason.decode!(File.read!(out))
+  end
+
+  defp trace_events(path) do
+    path
+    |> File.read!()
+    |> String.split("\n", trim: true)
+    |> Enum.map(fn line -> line |> Jason.decode!() |> Map.fetch!("event") end)
+  end
+
+  defp tmp_path(name) do
+    root = Path.join(System.tmp_dir!(), "trinity_ops_native_tasks_test")
+    File.mkdir_p!(root)
+    Path.join(root, "#{System.unique_integer([:positive])}_#{name}")
+  end
+
+  defp restore_hf_cache_dir(nil), do: Application.delete_env(:hf_hub, :cache_dir)
+  defp restore_hf_cache_dir(value), do: Application.put_env(:hf_hub, :cache_dir, value)
+end

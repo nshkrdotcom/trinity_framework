@@ -1,6 +1,11 @@
+unless Code.ensure_loaded?(DependencySources) do
+  Code.require_file(Path.expand("../../build_support/dependency_sources.exs", __DIR__))
+end
+
 defmodule Trinity.Ops.MixProject do
   use Mix.Project
 
+  @framework_root Path.expand("../..", __DIR__)
   @source_url "https://github.com/nshkrdotcom/trinity_framework"
 
   def project do
@@ -11,7 +16,7 @@ defmodule Trinity.Ops.MixProject do
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       aliases: aliases(),
-      dialyzer: [plt_add_deps: :apps_direct, plt_add_apps: [:mix]],
+      dialyzer: [plt_add_deps: :apps_direct, plt_add_apps: [:mix, :nx]],
       docs: docs()
     ]
   end
@@ -41,9 +46,15 @@ defmodule Trinity.Ops.MixProject do
        path: "../../bridges/trinity_bridge_self_hosted_inference"},
       {:trinity_bridge_inference, path: "../../bridges/trinity_bridge_inference"},
       {:trinity_bridge_trace, path: "../../bridges/trinity_bridge_trace"},
+      dep(:crucible_factorization),
+      dep(:crucible_model_registry),
+      dep(:self_hosted_inference_bumblebee),
+      {:hf_hub, "~> 0.3"},
       {:jason, "~> 1.4"}
     ] ++ quality_deps()
   end
+
+  defp dep(app, opts \\ []), do: DependencySources.dep(app, @framework_root, opts)
 
   defp quality_deps do
     [

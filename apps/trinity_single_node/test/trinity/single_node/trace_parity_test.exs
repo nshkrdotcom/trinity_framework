@@ -4,7 +4,10 @@ defmodule Trinity.SingleNode.TraceParityTest do
   alias Trinity.Bridge.Trace.Hash
   alias Trinity.SingleNode.RuntimeSupervisor
 
-  @cases_path "/home/home/p/g/n/trinity_coordinator/examples/fixtures/qwen_router_prompt_eval_cases.json"
+  @cases_path Path.expand(
+                "../../../../../examples/qwen_router_prompt_eval/fixtures/qwen_router_prompt_eval_cases.json",
+                __DIR__
+              )
 
   @expected_hashes %{
     "ambiguous_decomposition" =>
