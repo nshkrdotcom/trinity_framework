@@ -355,11 +355,11 @@ defmodule Trinity.Ops.NativeTasks do
           split,
           source_vector,
           tensor_name,
-          only_index,
           svd_compute_type,
           runtime_profile,
-          force?,
-          skip_existing?
+          only_index: only_index,
+          force: force?,
+          skip_existing: skip_existing?
         )
 
       kv("Export status", manifest["status"])
@@ -991,9 +991,16 @@ defmodule Trinity.Ops.NativeTasks do
 
   defp checkpoint_file(index, path) do
     index = index |> Integer.to_string() |> String.pad_leading(4, "0")
-    safe_path = String.replace(path, ~r/[^A-Za-z0-9_.-]/, "_")
+    safe_path = path |> String.to_charlist() |> Enum.map(&checkpoint_path_char/1) |> to_string()
     "#{index}_#{safe_path}.safetensors"
   end
+
+  defp checkpoint_path_char(char)
+       when char in ?A..?Z or char in ?a..?z or char in ?0..?9 or char in [?_, ?., ?-] do
+    char
+  end
+
+  defp checkpoint_path_char(_char), do: ?_
 
   defp print_export_manifest(manifest, split) do
     Mix.shell().info("Dry run complete: no files written")
@@ -1010,12 +1017,14 @@ defmodule Trinity.Ops.NativeTasks do
          split,
          source_vector,
          tensor_name,
-         only_index,
          svd_compute_type,
          runtime_profile,
-         force?,
-         skip_existing?
+         opts
        ) do
+    force? = Keyword.fetch!(opts, :force)
+    only_index = Keyword.fetch!(opts, :only_index)
+    skip_existing? = Keyword.fetch!(opts, :skip_existing)
+
     prepare_sakana_export_output!(out_dir, force?)
     Profile.put_default_backend!(runtime_profile)
 

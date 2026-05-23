@@ -20,8 +20,9 @@ defmodule TrinityFramework.MixProject do
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       aliases: aliases(),
+      blitz_workspace: blitz_workspace(),
       docs: docs(),
-      dialyzer: [plt_add_deps: :apps_direct],
+      dialyzer: [plt_add_deps: :apps_direct, plt_add_apps: [:mix, :blitz, :weld]],
       name: "TRINITY Framework",
       description: "Reusable TRINITY router and coordination framework",
       source_url: @source_url,
@@ -41,7 +42,11 @@ defmodule TrinityFramework.MixProject do
         ci: :test,
         credo: :test,
         dialyzer: :test,
-        docs: :dev
+        docs: :dev,
+        "monorepo.test": :test,
+        "monorepo.credo": :test,
+        "monorepo.dialyzer": :test,
+        "monorepo.docs": :dev
       ]
     ]
   end
@@ -59,6 +64,7 @@ defmodule TrinityFramework.MixProject do
     external_deps() ++
       [
         {:weld, "~> 0.8.2", only: [:dev, :test], runtime: false},
+        {:blitz, "~> 0.3.0", runtime: false},
         {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
         {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
         {:ex_doc, "~> 0.40.1", only: [:dev, :test], runtime: false},
@@ -96,18 +102,37 @@ defmodule TrinityFramework.MixProject do
   defp dep(app), do: DependencySources.dep(app, __DIR__, override: true)
 
   defp aliases do
+    monorepo_aliases = [
+      "monorepo.deps.get": ["blitz.workspace.impact deps_get --"],
+      "monorepo.format": ["blitz.workspace.impact format --"],
+      "monorepo.compile": ["blitz.workspace.impact compile --"],
+      "monorepo.test": ["blitz.workspace.impact test --"],
+      "monorepo.credo": ["blitz.workspace.impact credo --"],
+      "monorepo.dialyzer": ["blitz.workspace.impact dialyzer --"],
+      "monorepo.docs": ["blitz.workspace.impact docs --"],
+      "mr.deps.get": ["monorepo.deps.get"],
+      "mr.format": ["monorepo.format"],
+      "mr.compile": ["monorepo.compile"],
+      "mr.test": ["monorepo.test"],
+      "mr.credo": ["monorepo.credo"],
+      "mr.dialyzer": ["monorepo.dialyzer"],
+      "mr.docs": ["monorepo.docs"]
+    ]
+
     [
       ci: [
         "deps.get",
-        "format --check-formatted",
-        "compile --warnings-as-errors",
-        "test",
-        "credo --strict",
-        "dialyzer --format short",
-        "docs",
+        "monorepo.deps.get",
+        "monorepo.format --check-formatted",
+        "monorepo.compile",
+        "monorepo.test",
+        "monorepo.credo --strict",
+        "monorepo.dialyzer --format short",
+        "monorepo.docs --warnings-as-errors",
         &weld_verify/1
-      ]
-    ]
+      ],
+      "docs.root": ["docs"]
+    ] ++ monorepo_aliases
   end
 
   defp weld_verify(args) do
@@ -131,22 +156,44 @@ defmodule TrinityFramework.MixProject do
 
     inline_weld_runtime_imports!(build_path)
 
-    [
+    verification_results = [
       run_weld_mix!(build_path, :dev, ["deps.get"]),
       run_weld_mix!(build_path, :dev, ["deps.compile"]),
       run_weld_mix!(build_path, :dev, ["compile", "--warnings-as-errors", "--no-compile-deps"]),
       run_weld_mix!(build_path, :test, ["test"]),
       run_weld_mix!(build_path, :dev, ["docs", "--warnings-as-errors"]),
-      maybe_run_weld_mix!(build_path, :dev, ["hex.build"], plan.artifact.verify.hex_build),
+      maybe_run_weld_mix!(build_path, :dev, ["hex.build"], plan.artifact.verify.hex_build,
+        reason: :artifact_opted_out
+      ),
       maybe_run_weld_mix!(
         build_path,
         :dev,
         ["hex.publish", "--dry-run", "--yes"],
-        plan.artifact.verify.hex_build and plan.artifact.verify.hex_publish
+        plan.artifact.verify.hex_build and plan.artifact.verify.hex_publish,
+        reason:
+          if(plan.artifact.verify.hex_build,
+            do: :artifact_opted_out,
+            else: :hex_build_disabled
+          )
       )
     ]
 
+    write_weld_lockfile!(plan, projection, verification_results)
     Mix.shell().info("Verified artifact in #{build_path}")
+  end
+
+  defp write_weld_lockfile!(plan, projection, verification_results) do
+    projection_report =
+      Map.take(projection, [
+        :build_path,
+        :copied_files,
+        :package_files,
+        :git_revision,
+        :tree_digest
+      ])
+
+    lockfile = Weld.Lockfile.build(plan, projection_report, verification_results)
+    File.write!(projection.lockfile_path, Weld.Lockfile.encode!(lockfile))
   end
 
   defp inline_weld_runtime_imports!(build_path) do
@@ -162,8 +209,16 @@ defmodule TrinityFramework.MixProject do
   defp weld_runtime_imports(runtime_path) do
     runtime_path
     |> File.read!()
-    |> then(&Regex.scan(~r/import_config\s+"([^"]+\/runtime\.exs)"/, &1, capture: :all_but_first))
-    |> List.flatten()
+    |> String.split(["\n", "\r\n"])
+    |> Enum.map(&String.trim/1)
+    |> Enum.filter(&String.starts_with?(&1, "import_config"))
+    |> Enum.map(fn line ->
+      case String.split(line, "\"") do
+        [_, path, _] -> path
+        _ -> nil
+      end
+    end)
+    |> Enum.filter(& &1)
   end
 
   defp write_inlined_weld_runtime_sources!([], _runtime_path), do: :ok
@@ -191,28 +246,50 @@ defmodule TrinityFramework.MixProject do
   end
 
   defp strip_weld_import_config_header(source) do
-    String.replace(source, ~r/\A\s*import Config\s*/, "")
+    source
+    |> String.split(["\n", "\r\n"])
+    |> drop_import_config_header()
+    |> Enum.join("\n")
+  end
+
+  defp drop_import_config_header([]), do: []
+
+  defp drop_import_config_header([line | rest]) do
+    trimmed = String.trim(line)
+
+    cond do
+      trimmed == "" -> drop_import_config_header(rest)
+      trimmed == "import Config" -> rest
+      true -> [line | rest]
+    end
   end
 
   defp run_weld_mix!(build_path, env, args) do
     env_vars = [{"MIX_ENV", Atom.to_string(env)}]
 
-    {output, status} =
-      System.cmd("mix", args, cd: build_path, env: env_vars, stderr_to_stdout: true)
+    Mix.shell().info("Running projected command: MIX_ENV=#{env} mix #{Enum.join(args, " ")}")
+
+    {_, status} =
+      System.cmd("mix", args,
+        cd: build_path,
+        env: env_vars,
+        stderr_to_stdout: true,
+        into: IO.stream()
+      )
 
     if status != 0 do
-      Mix.raise("""
-      generated project command failed: MIX_ENV=#{env} mix #{Enum.join(args, " ")}
-
-      #{output}
-      """)
+      Mix.raise("generated project command failed: MIX_ENV=#{env} mix #{Enum.join(args, " ")}")
     end
 
-    :ok
+    %{task: Enum.join(args, " "), env: env, status: :ok}
   end
 
-  defp maybe_run_weld_mix!(build_path, env, args, true), do: run_weld_mix!(build_path, env, args)
-  defp maybe_run_weld_mix!(_build_path, _env, _args, false), do: :ok
+  defp maybe_run_weld_mix!(build_path, env, args, true, _opts),
+    do: run_weld_mix!(build_path, env, args)
+
+  defp maybe_run_weld_mix!(_build_path, env, args, false, opts) do
+    %{task: Enum.join(args, " "), env: env, status: :skipped, reason: opts[:reason]}
+  end
 
   defp docs do
     [
@@ -262,6 +339,44 @@ defmodule TrinityFramework.MixProject do
       source_ref: "main",
       source_url: @source_url,
       homepage_url: @source_url
+    ]
+  end
+
+  defp blitz_workspace do
+    [
+      root: __DIR__,
+      projects: WorkspaceContract.active_project_globs(),
+      isolation: [
+        deps_path: true,
+        build_path: true,
+        lockfile: true,
+        hex_home: "_build/hex",
+        unset_env: ["HEX_API_KEY", "SSLKEYLOGFILE"]
+      ],
+      parallelism: [
+        env: "TRINITY_FRAMEWORK_MONOREPO_MAX_CONCURRENCY",
+        max_concurrency: nil,
+        multiplier: :auto,
+        base: [
+          deps_get: 4,
+          format: 4,
+          compile: 4,
+          test: 4,
+          credo: 2,
+          dialyzer: 2,
+          docs: 4
+        ],
+        overrides: []
+      ],
+      tasks: [
+        deps_get: [args: ["deps.get"], preflight?: false],
+        format: [args: ["format"]],
+        compile: [args: ["compile", "--warnings-as-errors"]],
+        test: [args: ["test"], mix_env: "test", color: true],
+        credo: [args: ["credo"]],
+        dialyzer: [args: ["dialyzer", "--force-check"], mix_env: "test"],
+        docs: [args: ["docs"]]
+      ]
     ]
   end
 end

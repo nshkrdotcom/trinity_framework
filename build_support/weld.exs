@@ -20,13 +20,6 @@ defmodule TrinityFramework.Build.WeldContract do
     :aitrace
   ]
 
-  @local_git_dependencies MapSet.new([
-                            :crucible_safetensors,
-                            :crucible_factorization,
-                            :crucible_tensor_patch,
-                            :self_hosted_inference_bumblebee
-                          ])
-
   @artifact_docs [
     "README.md",
     "guides/onboarding.md",
@@ -99,19 +92,8 @@ defmodule TrinityFramework.Build.WeldContract do
 
   defp manifest_dependency(app) do
     config = Map.fetch!(dependency_configs(), app)
-
-    if MapSet.member?(@local_git_dependencies, app) do
-      [
-        opts: [
-          git: Path.expand(Map.fetch!(config, :path), @repo_root),
-          branch: "main",
-          override: true
-        ]
-      ]
-    else
-      github = Map.fetch!(config, :github)
-      [opts: github_opts(github)]
-    end
+    github = Map.fetch!(config, :github)
+    [opts: github_opts(github)]
   end
 
   defp dependency_configs do
