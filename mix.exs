@@ -26,7 +26,8 @@ defmodule TrinityFramework.MixProject do
       description: "Reusable TRINITY router and coordination framework",
       source_url: @source_url,
       homepage_url: @source_url,
-      package_paths: WorkspaceContract.package_paths()
+      package_paths: WorkspaceContract.package_paths(),
+      package: package()
     ]
   end
 
@@ -42,6 +43,15 @@ defmodule TrinityFramework.MixProject do
         dialyzer: :test,
         docs: :dev
       ]
+    ]
+  end
+
+  defp package do
+    [
+      name: "trinity_framework",
+      files: ~w(lib mix.exs README.md LICENSE CHANGELOG.md assets guides),
+      licenses: ["MIT"],
+      links: %{"GitHub" => @source_url}
     ]
   end
 
@@ -207,8 +217,11 @@ defmodule TrinityFramework.MixProject do
   defp docs do
     [
       main: "readme",
+      logo: "assets/trinity_framework.svg",
+      assets: %{"assets" => "assets"},
       extras: [
         "README.md",
+        "CHANGELOG.md",
         "guides/onboarding.md",
         "guides/system_architecture.md",
         "guides/operations_qc.md",
@@ -221,6 +234,30 @@ defmodule TrinityFramework.MixProject do
         "guides/svd_generation_runbook.md",
         "guides/provider_service_hardening.md",
         "guides/troubleshooting.md"
+      ],
+      groups_for_extras: [
+        "Getting Started": [
+          "guides/onboarding.md"
+        ],
+        "System Architecture": [
+          "guides/system_architecture.md",
+          "guides/runtime_profiles.md"
+        ],
+        "Artifacts & Pipelines": [
+          "guides/artifacts_and_export.md",
+          "guides/artifact_distribution.md"
+        ],
+        "Evaluation & QC": [
+          "guides/evals.md",
+          "guides/operations_qc.md",
+          "guides/stage_checks_and_tolerances.md"
+        ],
+        "Operations & Runbooks": [
+          "guides/svd_generation_runbook.md",
+          "guides/provider_service_hardening.md",
+          "guides/python_parity_reconstruction.md",
+          "guides/troubleshooting.md"
+        ]
       ],
       source_ref: "main",
       source_url: @source_url,
