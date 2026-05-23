@@ -4,29 +4,340 @@
 
 <p align="center">
   <a href="https://github.com/nshkrdotcom/trinity_framework"><img alt="GitHub" src="https://img.shields.io/badge/github-nshkrdotcom%2Ftrinity__framework-24292f?logo=github" /></a>
-  <img alt="Elixir" src="https://img.shields.io/badge/elixir-1.17%2B-4b275f?logo=elixir" />
-  <img alt="Weld" src="https://img.shields.io/badge/weld-0.8.1-2563eb" />
+  <a href="https://huggingface.co/datasets/nshkrdotcom/trinity-coordinator-adapted-qwen3-0.6b"><img alt="HuggingFace Dataset" src="https://img.shields.io/badge/huggingface-adapted--qwen3--0.6b-ffd21e" /></a>
+  <img alt="Elixir" src="https://img.shields.io/badge/elixir-1.18%2B-4b275f?logo=elixir" />
   <img alt="License" src="https://img.shields.io/badge/license-MIT-0f766e" />
 </p>
 
 # TRINITY Framework
 
-`trinity_framework` is the reusable TRINITY router and coordination contract
-package. It owns deterministic framework mechanics only:
+`trinity_framework` is the new source-of-truth TRINITY repository. The root
+Mix project is the assembled "monolith glue" distribution: it wires the
+deconstructed contracts, coordinator behavior, Sakana artifact pipeline, bridge
+packages, single-node runtime, operator command surface, and eval example into
+one standalone checkout.
 
-- router artifact, extractor, router head, and router decision contracts;
-- role pack registry contracts;
-- provider pool contracts with local, remote, self-hosted, mock, CLI, HTTP, and
-  governed inference slots;
-- verifier, trace, session, artifact, and coordination pattern contracts;
-- memory-default session persistence posture.
+The completion target for this repo is exact and testable: all functionality
+that existed on `main` in the old `~/p/g/n/trinity_coordinator` monolith must be
+ported here, adapted to the new architecture, and runnable from this root unless
+the behavior is intentionally documented as a compatibility-only shim. The old
+`trinity_coordinator` repo should end as a to-be-deprecated monolith hook-up for
+existing consumers, not as the owner of new runtime behavior.
 
-The framework does not own governed platform orchestration, authority, provider
-credentials, self-hosted process lifecycle, AppKit product surfaces, or
-TRINITY Qwen/Sakana buildout artifacts. Those stay in their owning repos.
+## Status
 
-## QC
+The root project owns the operator-facing assembly:
+
+- `core/trinity_contracts` defines the reusable router, role, provider,
+  verifier, trace, session, artifact, and coordination contracts.
+- `core/trinity_coordinator_core` owns the coordinator behavior extracted from
+  the former monolith.
+- `core/trinity_sakana_contracts` and `core/trinity_sakana_pipeline` own the
+  adapted-Qwen/Sakana artifact contracts, export, import, parity, and trace
+  surfaces.
+- `bridges/trinity_bridge_inference`,
+  `bridges/trinity_bridge_self_hosted_inference`, and
+  `bridges/trinity_bridge_trace` connect TRINITY to inference and trace
+  packages without moving ownership into the root facade.
+- `apps/trinity_single_node` is the standalone runtime app.
+- `tools/trinity_ops` owns every `mix trinity.*` operator command.
+- `examples/qwen_router_prompt_eval` owns the 37-case Qwen router prompt eval.
+
+This repo is also the integration point for the nshkr stack. It must be able to
+run standalone and sit inside the larger Mezzanine, Citadel, AppKit,
+Jido-integration, `execution_plane`, governance, and `stack_lab` testing flows
+through explicit package contracts and governed provider boundaries.
+
+## Quickstart
 
 ```bash
+git clone https://github.com/nshkrdotcom/trinity_framework
+cd trinity_framework
+mix deps.get
+mix test
 mix ci
 ```
+
+`mix test` must run root aggregate tests. If it reports that there are no tests
+to run, the root project is not complete.
+
+For CUDA routes:
+
+```bash
+XLA_TARGET=cuda12 mix trinity.env.check
+```
+
+`XLA_TARGET=cuda12` is the supported CUDA target. CPU/mock documentation and
+smoke work can use the `mock_tiny` runtime profile where a command exposes
+`--runtime-profile`.
+
+## Fetch The Adapted Bundle
+
+The generated adapted-Qwen3 safetensors bundle is not committed to git. The
+pin file is committed at `priv/sakana_trinity/artifact_pin.json`, and the
+default published dataset remains:
+
+```text
+nshkrdotcom/trinity-coordinator-adapted-qwen3-0.6b
+```
+
+Fetch and verify the bundle:
+
+```bash
+mix trinity.artifact.fetch
+```
+
+Offline cache-only fetch:
+
+```bash
+HF_HUB_OFFLINE=1 mix trinity.artifact.fetch --offline
+```
+
+Custom destination or pin:
+
+```bash
+mix trinity.artifact.fetch --dest priv/sakana_trinity/my_bundle
+mix trinity.artifact.fetch --pin priv/forks/my_pin.json
+```
+
+The default runtime bundle lands at:
+
+```text
+priv/sakana_trinity/adapted_qwen3_0_6b_layer26
+```
+
+## Run The Runtime
+
+Safe mock-provider smoke checks:
+
+```bash
+mix trinity.gates --fast
+mix trinity.route.demo \
+  --mock-provider \
+  --runtime-profile mock_tiny \
+  --max-turns 1 \
+  --trace-out tmp/trinity_route_demo.jsonl
+
+mix trinity.hitl.mock_loop \
+  --runtime-profile mock_tiny \
+  --max-turns 1 \
+  --trace-out tmp/trinity_mock_loop.jsonl
+```
+
+CUDA/adapted bundle checks:
+
+```bash
+XLA_TARGET=cuda12 mix trinity.hitl.gpu
+XLA_TARGET=cuda12 mix trinity.hitl.vector
+XLA_TARGET=cuda12 mix trinity.hitl.head_route
+XLA_TARGET=cuda12 mix trinity.hitl.base_qwen
+XLA_TARGET=cuda12 mix trinity.hitl.adapted
+```
+
+Gated live provider route demo:
+
+```bash
+XLA_TARGET=cuda12 mix trinity.route.demo \
+  --allow-live \
+  --provider-pool governed \
+  --governed-provider openai \
+  --governed-model gpt-4.1-mini \
+  --governed-api-key "$OPENAI_API_KEY" \
+  --trace-out tmp/trinity_live_route_demo.jsonl
+```
+
+Live provider commands must stay opt-in. The default path should not spend
+provider budget.
+
+## Run The Eval
+
+The main route-decision proof is the 37-case Qwen router prompt eval:
+
+```bash
+cd examples/qwen_router_prompt_eval
+XLA_TARGET=cuda12 mix run lib/qwen_router_prompt_eval.exs -- \
+  --snapshot fixtures/qwen_router_prompt_eval_logits.json \
+  --determinism-runs 2
+```
+
+Useful eval variants:
+
+```bash
+mix run lib/qwen_router_prompt_eval.exs -- --list-cases
+
+XLA_TARGET=cuda12 mix run lib/qwen_router_prompt_eval.exs -- \
+  --case planner.basic \
+  --snapshot fixtures/qwen_router_prompt_eval_logits.json
+
+XLA_TARGET=cuda12 mix run lib/qwen_router_prompt_eval.exs -- \
+  --snapshot-out tmp/qwen_router_prompt_eval_logits.json \
+  --determinism-runs 2
+```
+
+The eval asserts route decisions, margins, stable transcript fields, and
+determinism.
+
+## Generate Safetensors
+
+The adapted bundle can be regenerated from the Sakana vector and Qwen base
+model:
+
+```bash
+XLA_TARGET=cuda12 mix trinity.sakana.export_adapted \
+  --out priv/sakana_trinity/adapted_qwen3_0_6b_layer26 \
+  --source-vector priv/sakana_trinity/artifacts/trinity_router_es_vector.safetensors \
+  --force
+```
+
+Dry-run the export plan without writing the bundle:
+
+```bash
+mix trinity.sakana.export_adapted --dry-run --json
+```
+
+Run one tensor slice while debugging:
+
+```bash
+XLA_TARGET=cuda12 mix trinity.sakana.export_adapted \
+  --out tmp/adapted_qwen3_probe \
+  --only-index 1 \
+  --force
+```
+
+Python semantic imports and parity checks:
+
+```bash
+mix trinity.sakana.import_python \
+  --source-dir priv/sakana_trinity/python_export \
+  --manifest priv/sakana_trinity/reference/sakana_python_reference_manifest.json \
+  --out priv/sakana_trinity/adapted_qwen3_0_6b_layer26 \
+  --json
+
+mix trinity.sakana.parity_sample \
+  --python-report priv/sakana_trinity/reference/sakana_python_reference_manifest.json \
+  --semantic-only \
+  --no-cuda \
+  --out tmp/sakana_parity_sample.json
+
+mix trinity.sakana.large_tensor_chunks \
+  --python-report priv/sakana_trinity/reference/sakana_python_reference_manifest.json \
+  --chunk-rows 2048 \
+  --no-cuda \
+  --out tmp/sakana_large_tensor_chunks.json
+```
+
+## Upload To HuggingFace
+
+Publishing is intentionally not hidden behind an accidental default command.
+Use the `hf_hub` library in an authenticated IEx session after generating and
+reviewing the bundle:
+
+```elixir
+repo_id = "nshkrdotcom/trinity-coordinator-adapted-qwen3-0.6b"
+source_dir = "priv/sakana_trinity/adapted_qwen3_0_6b_layer26"
+
+{:ok, _repo} = HfHub.Repo.create(repo_id: repo_id, type: :dataset, exist_ok: true)
+
+{:ok, commit} =
+  HfHub.Commit.upload_folder(
+    repo_id: repo_id,
+    repo_type: :dataset,
+    folder_path: source_dir,
+    path_in_repo: ".",
+    commit_message: "Publish adapted Qwen3 bundle"
+  )
+
+commit
+```
+
+After upload, verify the remote tree against `manifest.json`, regenerate or
+update `priv/sakana_trinity/artifact_pin.json`, and tag the remote revision that
+fresh clones should consume.
+
+## Command Reference
+
+```text
+mix trinity.artifact.fetch             # Download and SHA-verify the adapted bundle
+mix trinity.demo                       # Compatibility wrapper for the route demo
+mix trinity.env.check                  # Validate build/runtime environment
+mix trinity.gates                      # Run the TRINITY quality gate matrix
+mix trinity.hitl.adapted               # Adapted-Qwen coordinator route check
+mix trinity.hitl.base_qwen             # Base Qwen hidden-state check
+mix trinity.hitl.gpu                   # GPU/EXLA CUDA visibility check
+mix trinity.hitl.head_route            # Hidden-state to Sakana-head route check
+mix trinity.hitl.mock_loop             # Mock orchestrator loop check
+mix trinity.hitl.vector                # Sakana router-vector split check
+mix trinity.parity.check               # Python/Elixir parity comparator wrapper
+mix trinity.route.demo                 # Gated route demo
+mix trinity.sakana.export_adapted      # Export adapted Qwen tensors and router head
+mix trinity.sakana.import_python       # Import Python semantic Sakana artifacts
+mix trinity.sakana.large_tensor_chunks # Replay large tensor stages in chunks
+mix trinity.sakana.parity_sample       # Emit SVD/SVF parity diagnostics
+mix trinity.sakana.router_trace        # Emit fixed-transcript router trace
+```
+
+Run `mix help --search trinity` for the authoritative local task list.
+
+## Quality Gates
+
+The final root acceptance target is:
+
+```bash
+mix test
+mix ci
+mix help --search trinity
+mix trinity.gates --fast
+mix trinity.artifact.fetch
+XLA_TARGET=cuda12 mix trinity.hitl.gpu
+XLA_TARGET=cuda12 mix trinity.hitl.vector
+XLA_TARGET=cuda12 mix trinity.hitl.head_route
+XLA_TARGET=cuda12 mix trinity.hitl.base_qwen
+XLA_TARGET=cuda12 mix trinity.hitl.adapted
+```
+
+`mix ci` expands to dependency fetch, formatting, warning-as-error compile,
+tests, Credo strict, Dialyzer, docs generation, and Weld projection checks.
+No framework warnings, test failures, Credo issues, or Dialyzer issues are
+acceptable for sign-off.
+
+## Guides
+
+- [Onboarding](guides/onboarding.md)
+- [System Architecture](guides/system_architecture.md)
+- [Operations And QC](guides/operations_qc.md)
+- [Artifact Distribution](guides/artifact_distribution.md)
+- [Artifacts And Export](guides/artifacts_and_export.md)
+- [Runtime Profiles](guides/runtime_profiles.md)
+- [Evals](guides/evals.md)
+- [Python Parity Reconstruction](guides/python_parity_reconstruction.md)
+- [Stage Checks And Tolerances](guides/stage_checks_and_tolerances.md)
+- [SVD Generation Runbook](guides/svd_generation_runbook.md)
+- [Provider Service Hardening](guides/provider_service_hardening.md)
+- [Troubleshooting](guides/troubleshooting.md)
+
+## Repository Layout
+
+```text
+assets/                         Logos and static docs assets
+bridges/                        Integration bridge packages
+core/                           Contracts, coordinator core, Sakana pipeline
+apps/trinity_single_node/       Standalone runtime application
+tools/trinity_ops/              mix trinity.* operator commands
+examples/qwen_router_prompt_eval/ 37-case router prompt eval
+priv/sakana_trinity/            Artifact pins, scripts, references, local bundle
+guides/                         Operator and architecture documentation
+test/                           Root aggregate and drift tests
+```
+
+## Requirements
+
+- Elixir/Erlang from `.tool-versions`.
+- CUDA-capable Linux host for CUDA acceptance and adapted-Qwen runtime checks.
+- HuggingFace network access for first-time `mix trinity.artifact.fetch`.
+- `HF_TOKEN` or equivalent HuggingFace auth only when publishing bundles.
+- Python, PyTorch, Transformers, NumPy, and safetensors only for Python parity
+  reconstruction and original Sakana script workflows.
+
+## License
+
+MIT.
