@@ -19,12 +19,16 @@ defmodule Trinity.Bridge.SelfHostedInference.Boundary.NoLibOsEnvTest do
     out
     |> String.split("\n", trim: true)
     |> Enum.filter(&(String.ends_with?(&1, ".ex") or String.ends_with?(&1, ".exs")))
-    |> Enum.flat_map(fn path ->
-      body = File.read!(path)
+    |> Enum.flat_map(&file_hits/1)
+  end
 
-      Enum.flat_map(@forbidden, fn token ->
-        if String.contains?(body, token), do: [{path, token}], else: []
-      end)
-    end)
+  defp file_hits(path) do
+    body = File.read!(path)
+
+    Enum.flat_map(@forbidden, &token_hits(path, body, &1))
+  end
+
+  defp token_hits(path, body, token) do
+    if String.contains?(body, token), do: [{path, token}], else: []
   end
 end
