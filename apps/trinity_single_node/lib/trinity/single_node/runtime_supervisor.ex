@@ -135,8 +135,8 @@ defmodule Trinity.SingleNode.RuntimeSupervisor do
     end
   end
 
-  defp derive_decision(logits, messages, opts) do
-    RouteDecisionDerivation.from_logits(logits, messages,
+  defp derive_decision(logits, _messages, opts) do
+    RouteDecisionDerivation.from_logits(logits, logits.transcript_hash,
       router_decision_ref:
         Keyword.get(opts, :router_decision_ref, generated_ref("route-decision")),
       coordination_run_ref: coordination_run_ref(opts),

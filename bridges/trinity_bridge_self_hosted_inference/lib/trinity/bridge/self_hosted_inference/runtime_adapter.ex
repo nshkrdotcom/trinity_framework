@@ -34,7 +34,8 @@ defmodule Trinity.Bridge.SelfHostedInference.RuntimeAdapter do
     core_module = Keyword.get(opts, :core_module, @default_core)
     route_module = Keyword.get(opts, :route_module, @default_route)
 
-    with {:ok, adapter} <- adapter_from_plan(route_module, plan, opts),
+    with :ok <- ensure_route_module_loaded(route_module),
+         {:ok, adapter} <- adapter_from_plan(route_module, plan, opts),
          :ok <- register_backend(core_module, route_module, opts),
          {:ok, %RuntimeSnapshot{} = instance} <-
            ensure_instance(core_module, route_module, adapter, plan, opts),
@@ -70,6 +71,13 @@ defmodule Trinity.Bridge.SelfHostedInference.RuntimeAdapter do
 
       true ->
         {:error, {:unsupported_route_module, route_module}}
+    end
+  end
+
+  defp ensure_route_module_loaded(route_module) do
+    case Code.ensure_loaded(route_module) do
+      {:module, ^route_module} -> :ok
+      {:error, reason} -> {:error, {:unsupported_route_module, route_module, reason}}
     end
   end
 

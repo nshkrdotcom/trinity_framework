@@ -42,6 +42,15 @@ defmodule Trinity.Bridge.SelfHostedInference.RuntimeAdapterTest do
     assert is_integer(logits.selected_role_id)
   end
 
+  test "loads the Qwen/Sakana adapter descriptor without requiring the module to be preloaded" do
+    plan = mock_plan(adapter_id: :trinity_qwen3_0_6b_sakana, runtime_profile: :host_exla)
+
+    assert {:ok, %RuntimeAdapter{} = runtime} = RuntimeAdapter.load(plan, load_adapter?: false)
+    assert runtime.instance.backend == :bumblebee
+    assert runtime.instance.adapter_ref.id == :trinity_qwen3_0_6b_sakana
+    assert runtime.adapter.runtime_profile == :host_exla
+  end
+
   test "top-level bridge delegates to the runtime adapter" do
     plan = mock_plan()
 
