@@ -207,7 +207,21 @@ defmodule TrinityFramework.MixProject do
   defp docs do
     [
       main: "readme",
-      extras: ["README.md"],
+      extras: [
+        "README.md",
+        "guides/onboarding.md",
+        "guides/system_architecture.md",
+        "guides/operations_qc.md",
+        "guides/artifact_distribution.md",
+        "guides/artifacts_and_export.md",
+        "guides/runtime_profiles.md",
+        "guides/evals.md",
+        "guides/python_parity_reconstruction.md",
+        "guides/stage_checks_and_tolerances.md",
+        "guides/svd_generation_runbook.md",
+        "guides/provider_service_hardening.md",
+        "guides/troubleshooting.md"
+      ],
       source_ref: "main",
       source_url: @source_url,
       homepage_url: @source_url

@@ -31,7 +31,9 @@ defmodule TrinityFrameworkRootTest do
                trace_ref: "trace:root-test"
              })
 
-    assert decision.router_decision_ref == "router_decision:coordination-run:root-test:role:planner"
+    assert decision.router_decision_ref ==
+             "router_decision:coordination-run:root-test:role:planner"
+
     assert decision.selected_role_ref == "role:planner"
     assert decision.confidence_band == :high
     assert decision.trace_ref == "trace:root-test"
