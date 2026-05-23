@@ -11,7 +11,7 @@ defmodule Trinity.Ops.MixProject do
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       aliases: aliases(),
-      dialyzer: [plt_add_deps: :apps_direct],
+      dialyzer: [plt_add_deps: :apps_direct, plt_add_apps: [:mix]],
       docs: docs()
     ]
   end
@@ -40,7 +40,8 @@ defmodule Trinity.Ops.MixProject do
       {:trinity_bridge_self_hosted_inference,
        path: "../../bridges/trinity_bridge_self_hosted_inference"},
       {:trinity_bridge_inference, path: "../../bridges/trinity_bridge_inference"},
-      {:trinity_bridge_trace, path: "../../bridges/trinity_bridge_trace"}
+      {:trinity_bridge_trace, path: "../../bridges/trinity_bridge_trace"},
+      {:jason, "~> 1.4"}
     ] ++ quality_deps()
   end
 

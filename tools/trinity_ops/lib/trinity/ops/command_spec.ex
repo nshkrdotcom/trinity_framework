@@ -1,0 +1,200 @@
+defmodule Trinity.Ops.CommandSpec do
+  @moduledoc """
+  Parser contract for the operator-visible `mix trinity.*` task surface.
+  """
+
+  @type task_key :: atom()
+
+  @spec all() :: %{task_key() => map()}
+  def all do
+    %{
+      trinity_artifact_fetch: %{
+        task: "trinity.artifact.fetch",
+        switches: [pin: :string, dest: :string, offline: :boolean, help: :boolean]
+      },
+      trinity_demo: %{task: "trinity.demo", switches: []},
+      trinity_env_check: %{
+        task: "trinity.env.check",
+        switches: [artifact_dir: :string, require: :string],
+        aliases: [a: :artifact_dir, r: :require]
+      },
+      trinity_gates: %{
+        task: "trinity.gates",
+        switches: [
+          skip_dialyzer: :boolean,
+          skip_docs: :boolean,
+          fast: :boolean,
+          include_parity_check: :boolean,
+          python_report: :string,
+          elixir_report: :string,
+          include_hex_build: :boolean,
+          summary_out: :string
+        ]
+      },
+      trinity_hitl_adapted: %{
+        task: "trinity.hitl.adapted",
+        switches: [
+          artifact_dir: :string,
+          runtime_profile: :string,
+          compare_path: :string,
+          message: :string
+        ]
+      },
+      trinity_hitl_base_qwen: %{task: "trinity.hitl.base_qwen", switches: []},
+      trinity_hitl_gpu: %{task: "trinity.hitl.gpu", switches: []},
+      trinity_hitl_head_route: %{task: "trinity.hitl.head_route", switches: []},
+      trinity_hitl_mock_loop: %{
+        task: "trinity.hitl.mock_loop",
+        switches: [
+          artifact_dir: :string,
+          runtime_profile: :string,
+          max_turns: :integer,
+          message: :string,
+          trace_out: :string,
+          trace_content: :string,
+          run_id: :string
+        ]
+      },
+      trinity_hitl_vector: %{task: "trinity.hitl.vector", switches: []},
+      trinity_parity_check: %{
+        task: "trinity.parity.check",
+        switches: [
+          python_report: :string,
+          elixir_report: :string,
+          strict_stage_tolerances: :boolean,
+          strict_current_python: :boolean,
+          strict_reference: :boolean,
+          top_diffs: :integer,
+          summary_out: :string,
+          python: :string
+        ]
+      },
+      trinity_route_demo: %{
+        task: "trinity.route.demo",
+        switches: [
+          allow_live: :boolean,
+          artifact_dir: :string,
+          runtime_profile: :string,
+          governed_api_key: :string,
+          governed_authority_ref: :string,
+          governed_base_url: :string,
+          governed_credential_ref: :string,
+          governed_model: :string,
+          governed_provider: :string,
+          governed_provider_pool_ref: :string,
+          governed_runtime_ref: :string,
+          governed_workflow_ref: :string,
+          max_turns: :integer,
+          message: :string,
+          mock: :boolean,
+          mock_provider: :boolean,
+          openai_api_key: :string,
+          profile: :string,
+          provider_pool: :string,
+          run_id: :string,
+          trace_content: :string,
+          trace_out: :string
+        ]
+      },
+      trinity_sakana_export_adapted: %{
+        task: "trinity.sakana.export_adapted",
+        switches: [
+          out: :string,
+          source_vector: :string,
+          tensor_name: :string,
+          profile: :string,
+          resume: :boolean,
+          force: :boolean,
+          only_index: :integer,
+          skip_existing: :boolean,
+          dry_run: :boolean,
+          svd_compute_type: :string,
+          json: :boolean,
+          runtime_profile: :string
+        ]
+      },
+      trinity_sakana_import_python: %{
+        task: "trinity.sakana.import_python",
+        switches: [
+          source_dir: :string,
+          manifest: :string,
+          reference: :string,
+          out: :string,
+          force: :boolean,
+          resume: :boolean,
+          no_load_qwen: :boolean,
+          json: :boolean
+        ]
+      },
+      trinity_sakana_large_tensor_chunks: %{
+        task: "trinity.sakana.large_tensor_chunks",
+        switches: [
+          out: :string,
+          components_dir: :string,
+          python_report: :string,
+          stage_dir: :string,
+          chunk_rows: :integer,
+          source: :string,
+          no_cuda: :boolean
+        ]
+      },
+      trinity_sakana_parity_sample: %{
+        task: "trinity.sakana.parity_sample",
+        switches: [
+          out: :string,
+          components_dir: :string,
+          python_report: :string,
+          stage_dir: :string,
+          router_vector: :string,
+          reference: :string,
+          no_cuda: :boolean,
+          semantic_only: :boolean,
+          host_semantic_only: :boolean,
+          device_semantic_only: :boolean,
+          preferred_layout_only: :boolean,
+          source_from_python_stage: :boolean,
+          all_selected_tensors: :boolean,
+          selected_source_filter: :string,
+          skip_native_svd: :boolean
+        ]
+      },
+      trinity_sakana_router_trace: %{
+        task: "trinity.sakana.router_trace",
+        switches: [
+          artifact_dir: :string,
+          runtime_profile: :string,
+          python_report: :string,
+          out: :string,
+          message: :string,
+          hidden_max_abs: :float,
+          hidden_mean_abs: :float,
+          hidden_min_cosine: :float,
+          hidden_max_relative_l2: :float,
+          logits_max_abs: :float,
+          logits_mean_abs: :float,
+          logits_min_cosine: :float,
+          logits_max_relative_l2: :float
+        ]
+      }
+    }
+  end
+
+  @spec task_name!(task_key()) :: String.t()
+  def task_name!(task_key), do: Map.fetch!(all(), task_key).task
+
+  @spec parse!(task_key(), [String.t()]) :: keyword()
+  def parse!(task_key, argv) do
+    spec = Map.fetch!(all(), task_key)
+
+    {opts, rest, invalid} =
+      OptionParser.parse(argv,
+        strict: Map.fetch!(spec, :switches),
+        aliases: Map.get(spec, :aliases, [])
+      )
+
+    unless rest == [], do: raise(ArgumentError, "unexpected arguments: #{inspect(rest)}")
+    unless invalid == [], do: raise(ArgumentError, "invalid options: #{inspect(invalid)}")
+
+    opts
+  end
+end
