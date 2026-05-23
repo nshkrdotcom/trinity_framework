@@ -1,6 +1,8 @@
 defmodule TrinityFrameworkRootTest do
   use ExUnit.Case, async: true
 
+  alias Trinity.Ops.CommandSpec
+
   @expected_tasks ~w(
     trinity.artifact.fetch
     trinity.demo
@@ -77,12 +79,12 @@ defmodule TrinityFrameworkRootTest do
       Trinity.Ops,
       Trinity.Examples.QwenRouterPromptEval,
       Trinity.SakanaPipeline.Exporter,
-      Trinity.Ops.CommandSpec
+      CommandSpec
     ]
 
     assert Enum.all?(modules, &Code.ensure_loaded?/1)
 
-    assert Trinity.Ops.CommandSpec.all()
+    assert CommandSpec.all()
            |> Map.values()
            |> Enum.map(& &1.task)
            |> Enum.sort() == Enum.sort(@expected_tasks)
@@ -154,6 +156,87 @@ defmodule TrinityFrameworkRootTest do
     assert Enum.all?(files, &sha256?(&1["sha256"]))
   end
 
+  test "operator command parser accepts representative old command flags at root" do
+    samples = [
+      {:trinity_artifact_fetch,
+       ["--pin", "priv/sakana_trinity/artifact_pin.json", "--dest", "tmp/bundle", "--offline"]},
+      {:trinity_demo, route_demo_args()},
+      {:trinity_env_check,
+       ["--artifact-dir", "priv/sakana_trinity/adapted", "--require", "cuda"]},
+      {:trinity_gates, ["--fast", "--summary-out", "tmp/gates.json"]},
+      {:trinity_hitl_adapted,
+       ["--artifact-dir", "priv/sakana_trinity/adapted", "--runtime-profile", "mock_tiny"]},
+      {:trinity_hitl_base_qwen, []},
+      {:trinity_hitl_gpu, []},
+      {:trinity_hitl_head_route, []},
+      {:trinity_hitl_mock_loop,
+       ["--runtime-profile", "mock_tiny", "--max-turns", "1", "--trace-out", "tmp/mock.jsonl"]},
+      {:trinity_hitl_vector, []},
+      {:trinity_parity_check,
+       [
+         "--python-report",
+         "tmp/python.json",
+         "--elixir-report",
+         "tmp/elixir.json",
+         "--strict-stage-tolerances",
+         "--top-diffs",
+         "5"
+       ]},
+      {:trinity_route_demo, route_demo_args()},
+      {:trinity_sakana_export_adapted,
+       [
+         "--out",
+         "tmp/export",
+         "--only-index",
+         "1",
+         "--force",
+         "--json",
+         "--runtime-profile",
+         "mock_tiny"
+       ]},
+      {:trinity_sakana_import_python,
+       [
+         "--source-dir",
+         "tmp/python",
+         "--manifest",
+         "tmp/manifest.json",
+         "--out",
+         "tmp/import",
+         "--json"
+       ]},
+      {:trinity_sakana_large_tensor_chunks,
+       ["--python-report", "tmp/python.json", "--chunk-rows", "2048", "--no-cuda"]},
+      {:trinity_sakana_parity_sample,
+       [
+         "--python-report",
+         "tmp/python.json",
+         "--semantic-only",
+         "--no-cuda",
+         "--out",
+         "tmp/parity.json"
+       ]},
+      {:trinity_sakana_router_trace,
+       [
+         "--runtime-profile",
+         "mock_tiny",
+         "--python-report",
+         "tmp/python.json",
+         "--hidden-max-abs",
+         "0.001",
+         "--logits-min-cosine",
+         "0.99"
+       ]}
+    ]
+
+    for {task_key, args} <- samples do
+      assert is_list(CommandSpec.parse!(task_key, args))
+    end
+
+    assert_raise ArgumentError, fn ->
+      CommandSpec.parse!(:trinity_route_demo, ["--unknown"])
+    end
+  end
+
   test "qwen router eval fixtures keep the 37-case acceptance shape" do
     cases_fixture =
       json!("examples/qwen_router_prompt_eval/fixtures/qwen_router_prompt_eval_cases.json")
@@ -204,8 +287,9 @@ defmodule TrinityFrameworkRootTest do
   test "root framework source does not keep hard-coded coordinator implementation paths" do
     source_files =
       Path.wildcard("{lib,core,bridges,apps,tools,examples}/**/*.{ex,exs}")
-      |> Enum.reject(&String.contains?(&1, "/deps/"))
-      |> Enum.reject(&String.contains?(&1, "/_build/"))
+      |> Enum.reject(fn path ->
+        String.contains?(path, "/deps/") or String.contains?(path, "/_build/")
+      end)
 
     forbidden_patterns = [
       "/home/home/p/g/n/trinity_coordinator",
@@ -251,6 +335,22 @@ defmodule TrinityFrameworkRootTest do
       ],
       provider_pool: []
     }
+  end
+
+  defp route_demo_args do
+    [
+      "--mock-provider",
+      "--runtime-profile",
+      "mock_tiny",
+      "--max-turns",
+      "1",
+      "--trace-out",
+      "tmp/route.jsonl",
+      "--governed-provider",
+      "openai",
+      "--governed-model",
+      "gpt-4.1-mini"
+    ]
   end
 
   defp json!(path) do

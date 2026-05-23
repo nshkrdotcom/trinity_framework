@@ -103,7 +103,6 @@ defmodule TrinityFrameworkDocsTest do
 
   defp docs_corpus do
     @required_docs
-    |> Enum.map(&File.read!/1)
-    |> Enum.join("\n\n")
+    |> Enum.map_join("\n\n", &File.read!/1)
   end
 end
