@@ -95,10 +95,114 @@ defmodule TrinityFramework.MixProject do
         "credo --strict",
         "dialyzer --format short",
         "docs",
-        "weld.verify"
+        &weld_verify/1
       ]
     ]
   end
+
+  defp weld_verify(args) do
+    {opts, _positional, invalid} = OptionParser.parse(args, strict: [artifact: :string])
+
+    if invalid != [] do
+      Mix.raise("Usage: mix ci [--artifact name]")
+    end
+
+    "build_support/weld.exs"
+    |> Weld.Plan.build!(artifact: opts[:artifact])
+    |> verify_weld_plan!()
+  end
+
+  # Weld 0.8.2 projects package runtime configs with import_config/1, which
+  # Elixir rejects from generated root runtime.exs. Keep the normal projected
+  # artifact gates, but inline those package runtime configs before verifying.
+  defp verify_weld_plan!(plan) do
+    projection = Weld.Projector.project!(plan)
+    build_path = projection.build_path
+
+    inline_weld_runtime_imports!(build_path)
+
+    [
+      run_weld_mix!(build_path, :dev, ["deps.get"]),
+      run_weld_mix!(build_path, :dev, ["deps.compile"]),
+      run_weld_mix!(build_path, :dev, ["compile", "--warnings-as-errors", "--no-compile-deps"]),
+      run_weld_mix!(build_path, :test, ["test"]),
+      run_weld_mix!(build_path, :dev, ["docs", "--warnings-as-errors"]),
+      maybe_run_weld_mix!(build_path, :dev, ["hex.build"], plan.artifact.verify.hex_build),
+      maybe_run_weld_mix!(
+        build_path,
+        :dev,
+        ["hex.publish", "--dry-run", "--yes"],
+        plan.artifact.verify.hex_build and plan.artifact.verify.hex_publish
+      )
+    ]
+
+    Mix.shell().info("Verified artifact in #{build_path}")
+  end
+
+  defp inline_weld_runtime_imports!(build_path) do
+    runtime_path = Path.join([build_path, "config", "runtime.exs"])
+
+    if File.regular?(runtime_path) do
+      runtime_path
+      |> weld_runtime_imports()
+      |> write_inlined_weld_runtime_sources!(runtime_path)
+    end
+  end
+
+  defp weld_runtime_imports(runtime_path) do
+    runtime_path
+    |> File.read!()
+    |> then(&Regex.scan(~r/import_config\s+"([^"]+\/runtime\.exs)"/, &1, capture: :all_but_first))
+    |> List.flatten()
+  end
+
+  defp write_inlined_weld_runtime_sources!([], _runtime_path), do: :ok
+
+  defp write_inlined_weld_runtime_sources!(imports, runtime_path) do
+    config_root = Path.dirname(runtime_path)
+
+    inlined_sources =
+      Enum.map_join(imports, "\n\n", &inlined_weld_runtime_source(config_root, &1))
+
+    File.write!(runtime_path, "import Config\n\n" <> String.trim(inlined_sources) <> "\n")
+  end
+
+  defp inlined_weld_runtime_source(config_root, relative_path) do
+    import_path = Path.join(config_root, relative_path)
+
+    unless File.regular?(import_path) do
+      Mix.raise("projected runtime config import not found: #{import_path}")
+    end
+
+    """
+    # Inlined from #{relative_path}; runtime.exs cannot call import_config.
+    #{strip_weld_import_config_header(File.read!(import_path))}
+    """
+  end
+
+  defp strip_weld_import_config_header(source) do
+    String.replace(source, ~r/\A\s*import Config\s*/, "")
+  end
+
+  defp run_weld_mix!(build_path, env, args) do
+    env_vars = [{"MIX_ENV", Atom.to_string(env)}]
+
+    {output, status} =
+      System.cmd("mix", args, cd: build_path, env: env_vars, stderr_to_stdout: true)
+
+    if status != 0 do
+      Mix.raise("""
+      generated project command failed: MIX_ENV=#{env} mix #{Enum.join(args, " ")}
+
+      #{output}
+      """)
+    end
+
+    :ok
+  end
+
+  defp maybe_run_weld_mix!(build_path, env, args, true), do: run_weld_mix!(build_path, env, args)
+  defp maybe_run_weld_mix!(_build_path, _env, _args, false), do: :ok
 
   defp docs do
     [

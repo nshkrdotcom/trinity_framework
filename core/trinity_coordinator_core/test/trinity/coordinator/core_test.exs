@@ -159,7 +159,9 @@ defmodule Trinity.CoordinatorCoreTest do
     assert decision.role_name == "Verifier"
     assert decision.margins.agent == 0.5
     assert decision.margins.role == 2.9
-    assert String.length(decision.transcript_hash) == 64
+
+    assert decision.transcript_hash ==
+             "f08a41138f0ae20bd9529ec45f6bccf323fd400841a625fae74682481abe83f3"
 
     trace = RouteDecisionDerivation.to_trace_map(decision)
     assert trace.agent_id == 0
