@@ -26,6 +26,7 @@ defmodule Trinity.Ops.NativeTasks do
 
   alias Trinity.SakanaPipeline.{
     ArtifactIO,
+    Exporter,
     LargeTensorChunks,
     ParityTrace,
     PythonImporter
@@ -317,7 +318,9 @@ defmodule Trinity.Ops.NativeTasks do
     force? = Keyword.get(opts, :force, false)
     resume? = Keyword.get(opts, :resume, false)
     only_index = Keyword.get(opts, :only_index)
+    skip_existing? = Keyword.get(opts, :skip_existing, true)
     svd_compute_type = svd_compute_type(Keyword.get(opts, :svd_compute_type, "source"))
+    runtime_profile = runtime_profile(Keyword.get(opts, :runtime_profile), :cuda_exla)
 
     banner("TRINITY SAKANA ADAPTED EXPORT")
     kv("Output directory", out_dir)
@@ -325,19 +328,16 @@ defmodule Trinity.Ops.NativeTasks do
     kv("Source tensor", tensor_name)
     kv("Dry run", dry_run?)
     kv("SVD compute type", svd_compute_type)
+    kv("Runtime profile", runtime_profile)
     validate_output_policy!(out_dir, force?, resume?, dry_run?)
     ensure_regular_file!(source_vector, "source vector")
 
     vector = SVD.load_router_vector!(source_vector, tensor_name)
     split = SVD.split_router_vector(vector, 9_216, 1_024, 10)
 
-    selected =
-      selected_manifest_entries()
-      |> maybe_only_index(only_index)
-
     manifest =
       export_manifest_seed(
-        selected,
+        selected_manifest_entries(),
         vector,
         split,
         source_vector,
@@ -348,16 +348,23 @@ defmodule Trinity.Ops.NativeTasks do
     if dry_run? do
       print_export_manifest(manifest, split)
     else
-      File.mkdir_p!(out_dir)
+      manifest =
+        run_sakana_export!(
+          out_dir,
+          vector,
+          split,
+          source_vector,
+          tensor_name,
+          only_index,
+          svd_compute_type,
+          runtime_profile,
+          force?,
+          skip_existing?
+        )
 
-      ArtifactIO.write_tensors!(
-        Path.join(out_dir, ArtifactIO.router_head_file()),
-        %{ArtifactIO.router_head_tensor_key() => split.head_weights}
-      )
-
-      ArtifactIO.write_manifest!(out_dir, manifest)
-      kv("Wrote manifest", ArtifactIO.manifest_path(out_dir))
-      kv("Wrote router head", Path.join(out_dir, ArtifactIO.router_head_file()))
+      kv("Export status", manifest["status"])
+      kv("Export complete", manifest["export_complete"])
+      kv("Completed tensors", completed_selected_tensors(manifest))
     end
 
     pass("TRINITY SAKANA ADAPTED EXPORT")
@@ -920,17 +927,19 @@ defmodule Trinity.Ops.NativeTasks do
     selected
     |> Enum.with_index(1)
     |> Enum.map_reduce(0, fn {entry, index}, cursor ->
-      singular_values = Map.fetch!(entry, "singular_values")
-      path = Map.fetch!(entry, "path")
+      singular_values = selected_entry_singular_values(entry)
+      path = selected_entry_path(entry)
+      shape = selected_entry_shape(entry)
+      type = selected_entry_type(entry)
 
       item = %{
         "index" => index,
         "path" => path,
         "artifact_key" => path,
-        "segments" => Map.get(entry, "segments", []),
-        "shape" => Map.fetch!(entry, "shape"),
-        "type" => "{:f, 32}",
-        "source_type" => "{:f, 32}",
+        "segments" => selected_entry_segments(entry),
+        "shape" => shape,
+        "type" => type,
+        "source_type" => type,
         "svd_compute_type" => Atom.to_string(svd_compute_type),
         "status" => "pending",
         "offset_start" => cursor,
@@ -954,26 +963,36 @@ defmodule Trinity.Ops.NativeTasks do
     |> elem(0)
   end
 
+  defp selected_entry_path(%{path: path}) when is_binary(path), do: path
+  defp selected_entry_path(%{"path" => path}) when is_binary(path), do: path
+
+  defp selected_entry_segments(%{segments: segments}) when is_list(segments), do: segments
+  defp selected_entry_segments(%{"segments" => segments}) when is_list(segments), do: segments
+  defp selected_entry_segments(_entry), do: []
+
+  defp selected_entry_shape(%{tensor: %Nx.Tensor{} = tensor}) do
+    tensor |> Nx.shape() |> Tuple.to_list()
+  end
+
+  defp selected_entry_shape(%{"shape" => shape}) when is_list(shape), do: shape
+
+  defp selected_entry_singular_values(%{"singular_values" => singular_values})
+       when is_integer(singular_values) do
+    singular_values
+  end
+
+  defp selected_entry_singular_values(%{tensor: %Nx.Tensor{} = tensor}) do
+    tensor |> Nx.shape() |> Tuple.to_list() |> Enum.min()
+  end
+
+  defp selected_entry_type(%{tensor: %Nx.Tensor{} = tensor}), do: inspect(Nx.type(tensor))
+  defp selected_entry_type(%{"type" => type}) when is_binary(type), do: type
+  defp selected_entry_type(_entry), do: "{:f, 32}"
+
   defp checkpoint_file(index, path) do
     index = index |> Integer.to_string() |> String.pad_leading(4, "0")
     safe_path = String.replace(path, ~r/[^A-Za-z0-9_.-]/, "_")
     "#{index}_#{safe_path}.safetensors"
-  end
-
-  defp maybe_only_index(entries, nil), do: entries
-
-  defp maybe_only_index(entries, index) when is_integer(index) and index > 0 do
-    case Enum.at(entries, index - 1) do
-      nil ->
-        Mix.raise("invalid --only-index value #{index}; only #{length(entries)} tensors exist")
-
-      entry ->
-        [entry]
-    end
-  end
-
-  defp maybe_only_index(_entries, index) do
-    Mix.raise("invalid --only-index value #{inspect(index)}; expected positive integer")
   end
 
   defp print_export_manifest(manifest, split) do
@@ -983,6 +1002,339 @@ defmodule Trinity.Ops.NativeTasks do
     kv("Router head shape", Nx.shape(split.head_weights))
     kv("Selected tensor count", manifest["selected_tensor_count"])
     kv("Selected singular values", manifest["selected_singular_value_count"])
+  end
+
+  defp run_sakana_export!(
+         out_dir,
+         vector,
+         split,
+         source_vector,
+         tensor_name,
+         only_index,
+         svd_compute_type,
+         runtime_profile,
+         force?,
+         skip_existing?
+       ) do
+    prepare_sakana_export_output!(out_dir, force?)
+    Profile.put_default_backend!(runtime_profile)
+
+    {:ok, {model_info, _tokenizer}} =
+      SLMProfile.load_profile(:qwen_coordinator)
+      |> normalize_model_load_result!()
+
+    selected = qwen_layer26_selected_tensors!(model_info)
+    validate_sakana_selection!(selected, split.scale_offsets)
+
+    manifest =
+      export_manifest_seed(
+        selected,
+        vector,
+        split,
+        source_vector,
+        tensor_name,
+        svd_compute_type
+      )
+      |> Map.put("only_index", only_index)
+      |> Map.put("skip_existing", skip_existing?)
+
+    ArtifactIO.write_manifest!(out_dir, manifest)
+
+    manifest =
+      out_dir
+      |> write_router_head!(split.head_weights, manifest, skip_existing?)
+      |> export_selected_tensor_checkpoints!(
+        out_dir,
+        selected,
+        split.scale_offsets,
+        selected_tensors_to_process(manifest, only_index),
+        svd_compute_type,
+        runtime_profile,
+        skip_existing?
+      )
+      |> finalize_sakana_export!(out_dir, only_index)
+
+    kv("Wrote manifest", ArtifactIO.manifest_path(out_dir))
+    kv("Wrote router head", Path.join(out_dir, ArtifactIO.router_head_file()))
+    manifest
+  end
+
+  defp normalize_model_load_result!({:ok, value}), do: {:ok, value}
+
+  defp normalize_model_load_result!({:error, reason}) do
+    Mix.raise("failed to load qwen_coordinator profile for export: #{inspect(reason)}")
+  end
+
+  defp prepare_sakana_export_output!(out_dir, true) do
+    File.rm_rf!(out_dir)
+    prepare_sakana_export_output!(out_dir, false)
+  end
+
+  defp prepare_sakana_export_output!(out_dir, false) do
+    File.mkdir_p!(ArtifactIO.checkpoint_path(out_dir))
+  end
+
+  defp qwen_layer26_selected_tensors!(model_info) do
+    model_info.params
+    |> SVD.decomposable_tensor_entries(path_filter: SVD.layer_index_filter([26]))
+    |> tap(fn selected ->
+      if selected == [] do
+        Mix.raise("no Qwen layer-26 decomposable tensors selected for Sakana export")
+      end
+    end)
+  end
+
+  defp validate_sakana_selection!(selected, scale_offsets) do
+    singular_count = SVD.singular_value_count(selected)
+    scale_count = Nx.size(scale_offsets)
+
+    unless singular_count == scale_count do
+      Mix.raise(
+        "selected tensor singular count mismatch: expected #{scale_count}, got #{singular_count}"
+      )
+    end
+  end
+
+  defp write_router_head!(out_dir, head_weights, manifest, skip_existing?) do
+    head_path = Path.join(out_dir, ArtifactIO.router_head_file())
+    head_key = manifest["router_head_tensor_key"] || ArtifactIO.router_head_tensor_key()
+
+    if skip_existing? and File.regular?(head_path) do
+      Map.put(manifest, "router_head_sha256", ArtifactIO.file_sha256!(head_path))
+    else
+      ArtifactIO.write_tensors!(head_path, %{head_key => head_weights})
+      Map.put(manifest, "router_head_sha256", ArtifactIO.file_sha256!(head_path))
+    end
+    |> then(fn updated ->
+      ArtifactIO.write_manifest!(out_dir, updated)
+      updated
+    end)
+  end
+
+  defp export_selected_tensor_checkpoints!(
+         manifest,
+         out_dir,
+         selected,
+         scale_offsets,
+         to_process,
+         svd_compute_type,
+         runtime_profile,
+         skip_existing?
+       ) do
+    source_tensors = Map.new(selected, &{&1.path, &1.tensor})
+
+    Enum.reduce(to_process, manifest, fn entry, current ->
+      source_tensor = Map.fetch!(source_tensors, entry["path"])
+
+      if skip_existing? and checkpoint_valid?(out_dir, entry) do
+        current
+      else
+        export_selected_tensor_checkpoint!(
+          current,
+          out_dir,
+          source_tensor,
+          entry,
+          scale_offsets,
+          svd_compute_type,
+          runtime_profile
+        )
+      end
+    end)
+  end
+
+  defp export_selected_tensor_checkpoint!(
+         manifest,
+         out_dir,
+         source_tensor,
+         entry,
+         scale_offsets,
+         svd_compute_type,
+         runtime_profile
+       ) do
+    running =
+      manifest
+      |> update_selected_tensor(entry["index"], %{"status" => "running", "error" => nil})
+      |> Map.put("updated_at", now_iso8601())
+
+    ArtifactIO.write_manifest!(out_dir, running)
+
+    offset_start = entry["offset_start"]
+    singular_count = entry["singular_values"]
+    offsets = Nx.slice(scale_offsets, [offset_start], [singular_count])
+
+    {decompose_ms, decomposition, decompose_source} =
+      timed_sakana_decompose!(source_tensor, svd_compute_type)
+
+    ensure_export_backend!(decomposition.u, entry["path"], runtime_profile)
+    ensure_export_backend!(decomposition.s, entry["path"], runtime_profile)
+    ensure_export_backend!(decomposition.v, entry["path"], runtime_profile)
+    ensure_export_backend!(source_tensor, entry["path"], runtime_profile)
+
+    {reconstruct_ms, adapted_tensor, reconstructed_before_cast} =
+      timed_sakana_reconstruct!(decomposition, offsets, source_tensor)
+
+    ensure_export_backend!(adapted_tensor, entry["path"], runtime_profile)
+
+    checkpoint_sha =
+      write_sakana_checkpoint!(
+        out_dir,
+        entry["checkpoint_path"],
+        entry["artifact_key"],
+        adapted_tensor
+      )
+
+    updated =
+      running
+      |> update_selected_tensor(entry["index"], %{
+        "status" => "complete",
+        "decompose_elapsed_ms" => decompose_ms,
+        "reconstruct_elapsed_ms" => reconstruct_ms,
+        "checkpoint_sha256" => checkpoint_sha,
+        "svd_compute_type" => Atom.to_string(svd_compute_type),
+        "decompose_source_type" => inspect(Nx.type(decompose_source)),
+        "reconstructed_type_before_cast" => inspect(Nx.type(reconstructed_before_cast)),
+        "checkpoint_type" => inspect(Nx.type(adapted_tensor)),
+        "u_backend" => Preflight.tensor_backend(decomposition.u),
+        "s_backend" => Preflight.tensor_backend(decomposition.s),
+        "v_backend" => Preflight.tensor_backend(decomposition.v),
+        "adapted_backend" => Preflight.tensor_backend(adapted_tensor),
+        "error" => nil
+      })
+      |> Map.put("updated_at", now_iso8601())
+
+    ArtifactIO.write_manifest!(out_dir, updated)
+    updated
+  rescue
+    exception ->
+      failed =
+        manifest
+        |> update_selected_tensor(entry["index"], %{
+          "status" => "failed",
+          "error" => Exception.message(exception)
+        })
+        |> Map.put("status", "failed")
+        |> Map.put("updated_at", now_iso8601())
+
+      ArtifactIO.write_manifest!(out_dir, failed)
+      reraise exception, __STACKTRACE__
+  end
+
+  defp timed_sakana_decompose!(source_tensor, svd_compute_type) do
+    started = System.monotonic_time(:millisecond)
+    decompose_source = decompose_source_tensor(source_tensor, svd_compute_type)
+    decomposition = SVD.decompose_tensor(decompose_source)
+
+    Exporter.sync_tensor!(decomposition.u)
+    Exporter.sync_tensor!(decomposition.s)
+    Exporter.sync_tensor!(decomposition.v)
+
+    elapsed_ms = System.monotonic_time(:millisecond) - started
+    {elapsed_ms, decomposition, decompose_source}
+  end
+
+  defp decompose_source_tensor(tensor, :source), do: tensor
+  defp decompose_source_tensor(tensor, :f32), do: Nx.as_type(tensor, :f32)
+
+  defp timed_sakana_reconstruct!(decomposition, offsets, source_tensor) do
+    started = System.monotonic_time(:millisecond)
+
+    reconstructed =
+      SVD.reconstruct(decomposition, Nx.as_type(offsets, Nx.type(decomposition.s)))
+
+    adapted =
+      reconstructed
+      |> Nx.as_type(Nx.type(source_tensor))
+      |> Exporter.sync_tensor!()
+
+    elapsed_ms = System.monotonic_time(:millisecond) - started
+    {elapsed_ms, adapted, reconstructed}
+  end
+
+  defp ensure_export_backend!(tensor, path, runtime_profile) do
+    profile = Profile.resolve(runtime_profile)
+    backend = Preflight.tensor_backend(tensor)
+
+    unless Profile.accepts_backend_label?(profile, backend) do
+      Mix.raise("unaccepted export backend for #{path}: #{backend} profile=#{profile.name}")
+    end
+  end
+
+  defp write_sakana_checkpoint!(out_dir, relative_path, artifact_key, tensor) do
+    path = Path.join(out_dir, relative_path)
+    ArtifactIO.write_tensors!(path, %{artifact_key => tensor})
+    ArtifactIO.file_sha256!(path)
+  end
+
+  defp checkpoint_valid?(out_dir, entry) do
+    path = Path.join(out_dir, entry["checkpoint_path"])
+
+    with true <- File.regular?(path),
+         expected when is_binary(expected) <- entry["checkpoint_sha256"],
+         true <- expected == ArtifactIO.file_sha256!(path),
+         %Nx.Tensor{} = tensor <- ArtifactIO.read_tensor!(path, entry["artifact_key"]) do
+      Nx.shape(tensor) == List.to_tuple(entry["shape"]) and
+        inspect(Nx.type(tensor)) == entry["type"]
+    else
+      _ -> false
+    end
+  end
+
+  defp selected_tensors_to_process(manifest, nil), do: manifest["selected_tensors"]
+
+  defp selected_tensors_to_process(manifest, only_index) do
+    selected = Enum.filter(manifest["selected_tensors"], &(&1["index"] == only_index))
+
+    if selected == [] do
+      Mix.raise("invalid --only-index value #{only_index}")
+    end
+
+    selected
+  end
+
+  defp finalize_sakana_export!(manifest, out_dir, nil) do
+    status =
+      if all_selected_tensors_complete?(manifest) do
+        %{"status" => "complete", "export_complete" => true}
+      else
+        %{"status" => "partial", "export_complete" => false}
+      end
+
+    finalized =
+      manifest
+      |> Map.merge(status)
+      |> Map.put("updated_at", now_iso8601())
+
+    ArtifactIO.write_manifest!(out_dir, finalized)
+    finalized
+  end
+
+  defp finalize_sakana_export!(manifest, out_dir, _only_index) do
+    partial =
+      manifest
+      |> Map.put("status", "partial")
+      |> Map.put("export_complete", false)
+      |> Map.put("updated_at", now_iso8601())
+
+    ArtifactIO.write_manifest!(out_dir, partial)
+    partial
+  end
+
+  defp all_selected_tensors_complete?(manifest) do
+    manifest["selected_tensors"] != [] and
+      Enum.all?(manifest["selected_tensors"], &(&1["status"] == "complete"))
+  end
+
+  defp completed_selected_tensors(manifest) do
+    Enum.count(manifest["selected_tensors"], &(&1["status"] == "complete"))
+  end
+
+  defp update_selected_tensor(manifest, index, updates) do
+    selected =
+      Enum.map(manifest["selected_tensors"], fn entry ->
+        if entry["index"] == index, do: Map.merge(entry, updates), else: entry
+      end)
+
+    Map.put(manifest, "selected_tensors", selected)
   end
 
   defp selected_tensors_from_report(report) do
@@ -1438,6 +1790,10 @@ defmodule Trinity.Ops.NativeTasks do
       framework_root(),
       "priv/sakana_trinity/reference/sakana_python_reference_manifest.json"
     )
+  end
+
+  defp now_iso8601 do
+    DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.to_iso8601()
   end
 
   defp default_python_manifest_path(nil), do: "trinity_sakana_export_manifest.json"

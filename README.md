@@ -235,16 +235,23 @@ reviewing the bundle:
 ```elixir
 repo_id = "nshkrdotcom/trinity-coordinator-adapted-qwen3-0.6b"
 source_dir = "priv/sakana_trinity/adapted_qwen3_0_6b_layer26"
+token = System.fetch_env!("HF_TOKEN")
 
-{:ok, _repo} = HfHub.Repo.create(repo_id: repo_id, type: :dataset, exist_ok: true)
+{:ok, _repo} =
+  HfHub.Repo.create(repo_id,
+    repo_type: :dataset,
+    exist_ok: true,
+    token: token
+  )
 
 {:ok, commit} =
   HfHub.Commit.upload_folder(
-    repo_id: repo_id,
+    source_dir,
+    repo_id,
     repo_type: :dataset,
-    folder_path: source_dir,
-    path_in_repo: ".",
-    commit_message: "Publish adapted Qwen3 bundle"
+    token: token,
+    commit_message: "Publish adapted Qwen3 bundle",
+    ignore_patterns: ["*.log.jsonl", "*.tmp", ".DS_Store"]
   )
 
 commit
