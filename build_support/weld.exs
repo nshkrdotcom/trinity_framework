@@ -77,7 +77,13 @@ defmodule TrinityFramework.Build.WeldContract do
     config = Map.fetch!(dependency_configs(), app)
 
     if MapSet.member?(@local_git_dependencies, app) do
-      [opts: [git: Path.expand(Map.fetch!(config, :path), @repo_root), branch: "main"]]
+      [
+        opts: [
+          git: Path.expand(Map.fetch!(config, :path), @repo_root),
+          branch: "main",
+          override: true
+        ]
+      ]
     else
       github = Map.fetch!(config, :github)
       [opts: github_opts(github)]
