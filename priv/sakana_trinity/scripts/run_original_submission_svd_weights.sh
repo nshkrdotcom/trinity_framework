@@ -4,10 +4,10 @@ set -euo pipefail
 # Runs the unmodified supplemental decomposer from docs/priv/trinity_code_submission
 # and writes all outputs under tmp/. The submission tree is read-only input.
 
-MODEL_NAME="${MODEL_NAME:-Qwen/Qwen3-0.6B}"
-OUT_ROOT="${OUT_ROOT:-tmp/sakana_parity/original_submission_svd}"
-THREADS="${THREADS:-4}"
-XLA_TARGET="${XLA_TARGET:-cuda12}"
+MODEL_NAME="${1:-Qwen/Qwen3-0.6B}"
+OUT_ROOT="${2:-tmp/sakana_parity/original_submission_svd}"
+THREADS="${3:-4}"
+XLA_TARGET="cuda12"
 UV_PY=(
   uv run
   --python 3.11

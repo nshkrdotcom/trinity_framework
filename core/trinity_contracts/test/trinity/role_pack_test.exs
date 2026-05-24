@@ -17,7 +17,7 @@ defmodule Trinity.RolePackTest do
                    budget_ref: "budget/role/verifier",
                    context_budget_ref: "context/role/verifier",
                    handoff_policy_ref: "handoff/role/verifier",
-                   appkit_projection_ref: "appkit/role/verifier",
+                   projection_ref: "projection/role/verifier",
                    gepa_target_refs: ["gepa/target/verifier_prompt"]
                  }
                ]
@@ -43,7 +43,7 @@ defmodule Trinity.RolePackTest do
       budget_ref: "budget/role/worker",
       context_budget_ref: "context/role/worker",
       handoff_policy_ref: "handoff/role/worker",
-      appkit_projection_ref: "appkit/role/worker",
+      projection_ref: "projection/role/worker",
       gepa_target_refs: ["gepa/target/role_prompt"]
     }
 

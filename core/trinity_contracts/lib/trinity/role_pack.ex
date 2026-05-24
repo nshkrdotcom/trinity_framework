@@ -17,7 +17,7 @@ defmodule Trinity.RolePack do
     :budget_ref,
     :context_budget_ref,
     :handoff_policy_ref,
-    :appkit_projection_ref,
+    :projection_ref,
     :gepa_target_refs
   ]
   defstruct [
@@ -32,7 +32,7 @@ defmodule Trinity.RolePack do
     :budget_ref,
     :context_budget_ref,
     :handoff_policy_ref,
-    :appkit_projection_ref,
+    :projection_ref,
     :gepa_target_refs
   ]
 
@@ -52,7 +52,7 @@ defmodule Trinity.RolePack do
          {:ok, budget_ref} <- Validation.require_binary(attrs, :budget_ref),
          {:ok, context_budget_ref} <- Validation.require_binary(attrs, :context_budget_ref),
          {:ok, handoff_policy_ref} <- Validation.require_binary(attrs, :handoff_policy_ref),
-         {:ok, appkit_projection_ref} <- Validation.require_binary(attrs, :appkit_projection_ref),
+         {:ok, projection_ref} <- Validation.require_binary(attrs, :projection_ref),
          {:ok, gepa_target_refs} <- Validation.require_list(attrs, :gepa_target_refs) do
       {:ok,
        %__MODULE__{
@@ -67,7 +67,7 @@ defmodule Trinity.RolePack do
          budget_ref: budget_ref,
          context_budget_ref: context_budget_ref,
          handoff_policy_ref: handoff_policy_ref,
-         appkit_projection_ref: appkit_projection_ref,
+         projection_ref: projection_ref,
          gepa_target_refs: gepa_target_refs
        }}
     end

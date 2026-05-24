@@ -25,7 +25,9 @@ defmodule TrinityFrameworkRootTest do
 
   @expected_guides ~w(
     guides/onboarding.md
+    guides/current_direction.md
     guides/system_architecture.md
+    guides/service_buildout.md
     guides/operations_qc.md
     guides/artifact_distribution.md
     guides/artifacts_and_export.md
@@ -36,6 +38,18 @@ defmodule TrinityFrameworkRootTest do
     guides/svd_generation_runbook.md
     guides/provider_service_hardening.md
     guides/troubleshooting.md
+    docs/agent_slot_provider_mapping.md
+    docs/bumblebee_unpin_playbook.md
+    docs/configurable_provider_pools.md
+    docs/coordination_head_variants.md
+    docs/elixir_svd_decomposition.md
+    docs/production_qwen_slm_profile.md
+    docs/production_runbook.md
+    docs/provider_smoke_tests.md
+    docs/sakana_adapted_artifact_plan.md
+    docs/sakana_svd_byte_match_rigor_plan.md
+    docs/sakana_svd_parity_debug_checklist.md
+    docs/trace_persistence.md
   )
 
   test "root facade compiles config, routes, and starts sessions" do
@@ -329,7 +343,7 @@ defmodule TrinityFrameworkRootTest do
           budget_ref: "budget:default",
           context_budget_ref: "context-budget:default",
           handoff_policy_ref: "handoff:default",
-          appkit_projection_ref: "appkit:router-decision",
+          projection_ref: "projection:router-decision",
           gepa_target_refs: []
         }
       ],
@@ -359,6 +373,11 @@ defmodule TrinityFrameworkRootTest do
     |> Jason.decode!()
   end
 
-  defp sha256?(value) when is_binary(value), do: value =~ ~r/\A[0-9a-f]{64}\z/
+  defp sha256?(value) when is_binary(value) do
+    byte_size(value) == 64 and Enum.all?(String.to_charlist(value), &hex_char?/1)
+  end
+
   defp sha256?(_value), do: false
+
+  defp hex_char?(char), do: char in ?0..?9 or char in ?a..?f
 end

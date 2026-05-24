@@ -40,11 +40,10 @@ for one release window so old imports and `mix trinity.*` commands keep working.
 
 ## Dependency Direction
 
-The framework may depend on lower runtime libraries such as Crucible,
+The framework may depend on reusable runtime libraries such as Crucible,
 self-hosted inference, `:inference`, AITrace, and execution plane libraries.
-It must not depend on AppKit, Mezzanine, Citadel, OuterBrain, or Jido product
-integration packages. Those integrate from their side through public TRINITY and
-AppKit projection surfaces.
+It must not depend on product integration packages. Those integrate from their
+side through public TRINITY contracts and generic projection references.
 
 ## Runtime Flow
 
@@ -55,4 +54,3 @@ AppKit projection surfaces.
 5. Build a `Trinity.Coordinator.RouteDecision`.
 6. Dispatch through the provider or self-hosted runtime bridge.
 7. Emit trace events through the trace bridge.
-

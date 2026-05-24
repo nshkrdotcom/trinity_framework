@@ -10,8 +10,8 @@ orchestration.
 - Trace primitives belong to AITrace.
 - Self-hosted model lifecycle belongs to `self_hosted_inference_core` and
   `self_hosted_inference_bumblebee`.
-- Product surfaces and platform governance integrate from AppKit/Mezzanine/
-  Citadel/Jido side; they are not direct framework dependencies.
+- Product surfaces and platform governance integrate from external product
+  systems; they are not direct framework dependencies.
 
 ## Safe Smoke Commands
 
@@ -41,4 +41,3 @@ mix trinity.route.demo \
 Use `trinity_bridge_trace` and AITrace primitives for deterministic JSONL,
 hashing, context, and redaction. Product code should consume approved public
 projections rather than importing lower model/runtime layers directly.
-

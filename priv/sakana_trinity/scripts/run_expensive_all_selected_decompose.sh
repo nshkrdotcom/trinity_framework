@@ -4,9 +4,9 @@ set -euo pipefail
 # Explicitly recomputes all selected SVD components from the current base Qwen
 # model through the parity debug harness, then runs Elixir all-selected replay.
 
-OUT_ROOT="${OUT_ROOT:-tmp/sakana_parity/expensive_all_selected_decompose}"
-THREADS="${THREADS:-4}"
-XLA_TARGET="${XLA_TARGET:-cuda12}"
+OUT_ROOT="${1:-tmp/sakana_parity/expensive_all_selected_decompose}"
+THREADS="${2:-4}"
+XLA_TARGET="cuda12"
 UV_PY=(
   uv run
   --python 3.11

@@ -133,9 +133,12 @@ defmodule Trinity.Ops.CommandSpecTest do
   end
 
   test "rejects unknown task options" do
-    assert_raise ArgumentError, ~r/invalid options/, fn ->
-      CommandSpec.parse!(:trinity_demo, ["--unknown"])
-    end
+    exception =
+      assert_raise ArgumentError, fn ->
+        CommandSpec.parse!(:trinity_demo, ["--unknown"])
+      end
+
+    assert String.contains?(Exception.message(exception), "invalid options")
   end
 
   test "parses the trinity.gates flag surface" do

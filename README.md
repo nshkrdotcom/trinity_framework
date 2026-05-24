@@ -44,9 +44,8 @@ The root project owns the operator-facing assembly:
 - `examples/qwen_router_prompt_eval` owns the 37-case Qwen router prompt eval.
 
 This repo is also the integration point for the nshkr stack. It must be able to
-run standalone and sit inside the larger Mezzanine, Citadel, AppKit,
-Jido-integration, `execution_plane`, governance, and `stack_lab` testing flows
-through explicit package contracts and governed provider boundaries.
+run standalone and sit inside larger product, governance, execution, and testing
+flows through explicit package contracts and governed provider boundaries.
 
 ## Quickstart
 
@@ -235,7 +234,7 @@ reviewing the bundle:
 ```elixir
 repo_id = "nshkrdotcom/trinity-coordinator-adapted-qwen3-0.6b"
 source_dir = "priv/sakana_trinity/adapted_qwen3_0_6b_layer26"
-token = System.fetch_env!("HF_TOKEN")
+token = caller_owned_huggingface_token
 
 {:ok, _repo} =
   HfHub.Repo.create(repo_id,
@@ -310,7 +309,9 @@ acceptable for sign-off.
 ## Guides
 
 - [Onboarding](guides/onboarding.md)
+- [Current Direction](guides/current_direction.md)
 - [System Architecture](guides/system_architecture.md)
+- [Service Buildout](guides/service_buildout.md)
 - [Operations And QC](guides/operations_qc.md)
 - [Artifact Distribution](guides/artifact_distribution.md)
 - [Artifacts And Export](guides/artifacts_and_export.md)
@@ -321,6 +322,10 @@ acceptable for sign-off.
 - [SVD Generation Runbook](guides/svd_generation_runbook.md)
 - [Provider Service Hardening](guides/provider_service_hardening.md)
 - [Troubleshooting](guides/troubleshooting.md)
+- [Production Runbook](docs/production_runbook.md)
+- [Provider Smoke Tests](docs/provider_smoke_tests.md)
+- [Sakana Adapted Artifact Plan](docs/sakana_adapted_artifact_plan.md)
+- [Trace Persistence](docs/trace_persistence.md)
 
 ## Repository Layout
 
@@ -333,6 +338,7 @@ tools/trinity_ops/              mix trinity.* operator commands
 examples/qwen_router_prompt_eval/ 37-case router prompt eval
 priv/sakana_trinity/            Artifact pins, scripts, references, local bundle
 guides/                         Operator and architecture documentation
+docs/                           Reference notes and production runbooks
 test/                           Root aggregate and drift tests
 ```
 

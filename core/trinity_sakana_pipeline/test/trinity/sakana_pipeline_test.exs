@@ -70,12 +70,19 @@ defmodule Trinity.SakanaPipelineTest do
     tensor = Nx.tensor([[1.0, 2.0], [3.0, 4.0]], type: :f32)
 
     assert ^path = ArtifactIO.write_tensors!(path, %{"demo" => tensor})
-    assert ArtifactIO.file_sha256!(path) =~ ~r/^[0-9a-f]{64}$/
+    assert sha256?(ArtifactIO.file_sha256!(path))
 
     restored = ArtifactIO.read_tensor!(path, "demo")
     assert Nx.shape(restored) == {2, 2}
     assert Nx.to_flat_list(restored) == [1.0, 2.0, 3.0, 4.0]
   end
+
+  defp sha256?(value) when is_binary(value) do
+    byte_size(value) == 64 and Enum.all?(String.to_charlist(value), &hex_char?/1)
+  end
+
+  defp sha256?(_value), do: false
+  defp hex_char?(char), do: char in ?0..?9 or char in ?a..?f
 
   test "python importer normalizes Sakana selected tensors with fallback mapping" do
     manifest = %{

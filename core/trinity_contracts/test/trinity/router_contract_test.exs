@@ -26,7 +26,7 @@ defmodule Trinity.RouterContractTest do
             budget_ref: "budget/role/worker",
             context_budget_ref: "context/role/worker",
             handoff_policy_ref: "handoff/role/worker",
-            appkit_projection_ref: "appkit/role/worker",
+            projection_ref: "projection/role/worker",
             gepa_target_refs: ["gepa/target/role_prompt"]
           }
         ],
@@ -86,7 +86,7 @@ defmodule Trinity.RouterContractTest do
             budget_ref: "budget/role/worker",
             context_budget_ref: "context/role/worker",
             handoff_policy_ref: "handoff/role/worker",
-            appkit_projection_ref: "appkit/role/worker",
+            projection_ref: "projection/role/worker",
             gepa_target_refs: ["gepa/target/role_prompt"]
           }
         ],

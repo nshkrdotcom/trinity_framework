@@ -54,7 +54,7 @@ defmodule TrinityFramework.MixProject do
   defp package do
     [
       name: "trinity_framework",
-      files: ~w(lib mix.exs README.md LICENSE CHANGELOG.md assets guides),
+      files: ~w(lib mix.exs README.md LICENSE CHANGELOG.md assets guides docs),
       licenses: ["MIT"],
       links: %{"GitHub" => @source_url}
     ]
@@ -300,7 +300,9 @@ defmodule TrinityFramework.MixProject do
         "README.md",
         "CHANGELOG.md",
         "guides/onboarding.md",
+        "guides/current_direction.md",
         "guides/system_architecture.md",
+        "guides/service_buildout.md",
         "guides/operations_qc.md",
         "guides/artifact_distribution.md",
         "guides/artifacts_and_export.md",
@@ -310,30 +312,56 @@ defmodule TrinityFramework.MixProject do
         "guides/stage_checks_and_tolerances.md",
         "guides/svd_generation_runbook.md",
         "guides/provider_service_hardening.md",
-        "guides/troubleshooting.md"
+        "guides/troubleshooting.md",
+        "docs/agent_slot_provider_mapping.md",
+        "docs/bumblebee_unpin_playbook.md",
+        "docs/configurable_provider_pools.md",
+        "docs/coordination_head_variants.md",
+        "docs/elixir_svd_decomposition.md",
+        "docs/production_qwen_slm_profile.md",
+        "docs/production_runbook.md",
+        "docs/provider_smoke_tests.md",
+        "docs/sakana_adapted_artifact_plan.md",
+        "docs/sakana_svd_byte_match_rigor_plan.md",
+        "docs/sakana_svd_parity_debug_checklist.md",
+        "docs/trace_persistence.md"
       ],
       groups_for_extras: [
         "Getting Started": [
-          "guides/onboarding.md"
+          "guides/onboarding.md",
+          "guides/current_direction.md"
         ],
         "System Architecture": [
           "guides/system_architecture.md",
-          "guides/runtime_profiles.md"
+          "guides/runtime_profiles.md",
+          "guides/service_buildout.md"
         ],
         "Artifacts & Pipelines": [
           "guides/artifacts_and_export.md",
-          "guides/artifact_distribution.md"
+          "guides/artifact_distribution.md",
+          "docs/sakana_adapted_artifact_plan.md",
+          "docs/elixir_svd_decomposition.md"
         ],
         "Evaluation & QC": [
           "guides/evals.md",
           "guides/operations_qc.md",
-          "guides/stage_checks_and_tolerances.md"
+          "guides/stage_checks_and_tolerances.md",
+          "docs/sakana_svd_byte_match_rigor_plan.md",
+          "docs/sakana_svd_parity_debug_checklist.md"
         ],
         "Operations & Runbooks": [
           "guides/svd_generation_runbook.md",
           "guides/provider_service_hardening.md",
           "guides/python_parity_reconstruction.md",
-          "guides/troubleshooting.md"
+          "guides/troubleshooting.md",
+          "docs/agent_slot_provider_mapping.md",
+          "docs/bumblebee_unpin_playbook.md",
+          "docs/configurable_provider_pools.md",
+          "docs/coordination_head_variants.md",
+          "docs/production_qwen_slm_profile.md",
+          "docs/production_runbook.md",
+          "docs/provider_smoke_tests.md",
+          "docs/trace_persistence.md"
         ]
       ],
       source_ref: "main",

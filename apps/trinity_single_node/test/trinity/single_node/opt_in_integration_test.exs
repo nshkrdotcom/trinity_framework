@@ -61,10 +61,10 @@ defmodule Trinity.SingleNode.OptInIntegrationTest do
   end
 
   defp required_artifact_root! do
-    artifact_root = System.get_env("TRINITY_ARTIFACT_DIR") || Config.artifact_root()
+    artifact_root = Config.artifact_root()
 
     unless File.dir?(artifact_root) do
-      raise "TRINITY_ARTIFACT_DIR must point at an adapted artifact directory"
+      raise "configured artifact_root must point at an adapted artifact directory"
     end
 
     artifact_root

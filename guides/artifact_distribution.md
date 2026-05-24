@@ -53,16 +53,12 @@ HF_HUB_OFFLINE=1 mix trinity.artifact.fetch --offline
 Publisher work requires `HF_TOKEN` with write access. Keep token usage in the
 explicit shell/IEx session.
 
-```bash
-HF_TOKEN=hf_xxx XLA_TARGET=cuda12 iex -S mix
-```
-
-Inside IEx:
+Start IEx with caller-owned credentials available to the session. Inside IEx:
 
 ```elixir
 artifact_dir = "priv/sakana_trinity/adapted_qwen3_0_6b_layer26"
 repo_id = "nshkrdotcom/trinity-coordinator-adapted-qwen3-0.6b"
-token = System.fetch_env!("HF_TOKEN")
+token = caller_owned_huggingface_token
 
 {:ok, _repo} =
   HfHub.Repo.create(repo_id,
@@ -110,4 +106,3 @@ After publishing a new revision, regenerate and commit
 `priv/sakana_trinity/artifact_pin.json`. If no build-support helper exists for
 the target revision, create the pin from the uploaded manifest and exact
 per-file SHA-256 values. Consumers rely on this pin for checksum verification.
-

@@ -4,7 +4,9 @@ defmodule TrinityFrameworkDocsTest do
   @required_docs ~w(
     README.md
     guides/onboarding.md
+    guides/current_direction.md
     guides/system_architecture.md
+    guides/service_buildout.md
     guides/operations_qc.md
     guides/artifact_distribution.md
     guides/artifacts_and_export.md
@@ -15,6 +17,18 @@ defmodule TrinityFrameworkDocsTest do
     guides/svd_generation_runbook.md
     guides/provider_service_hardening.md
     guides/troubleshooting.md
+    docs/agent_slot_provider_mapping.md
+    docs/bumblebee_unpin_playbook.md
+    docs/configurable_provider_pools.md
+    docs/coordination_head_variants.md
+    docs/elixir_svd_decomposition.md
+    docs/production_qwen_slm_profile.md
+    docs/production_runbook.md
+    docs/provider_smoke_tests.md
+    docs/sakana_adapted_artifact_plan.md
+    docs/sakana_svd_byte_match_rigor_plan.md
+    docs/sakana_svd_parity_debug_checklist.md
+    docs/trace_persistence.md
   )
 
   @expected_tasks ~w(
@@ -85,18 +99,18 @@ defmodule TrinityFrameworkDocsTest do
     assert String.contains?(corpus, "deprecated compatibility shim")
     assert String.contains?(corpus, "to-be-deprecated monolith hook")
 
-    forbidden_patterns = [
-      ~r/git clone\s+https:\/\/github\.com\/nshkrdotcom\/trinity_coordinator/,
-      ~r/\bcd\s+trinity_coordinator\b/,
-      ~r/trinity_coordinator`\s+is the new source-of-truth/,
-      ~r/trinity_coordinator`\s+owns new runtime behavior/,
-      ~r/trinity_coordinator`\s+is the root aggregate/
+    forbidden_strings = [
+      "git clone https://github.com/nshkrdotcom/trinity_coordinator",
+      "cd trinity_coordinator",
+      "trinity_coordinator` is the new source-of-truth",
+      "trinity_coordinator` owns new runtime behavior",
+      "trinity_coordinator` is the root aggregate"
     ]
 
     offenders =
-      for pattern <- forbidden_patterns,
-          Regex.match?(pattern, corpus),
-          do: Regex.source(pattern)
+      for forbidden <- forbidden_strings,
+          String.contains?(corpus, forbidden),
+          do: forbidden
 
     assert offenders == []
   end

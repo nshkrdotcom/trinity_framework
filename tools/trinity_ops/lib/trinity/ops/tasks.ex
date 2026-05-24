@@ -3,6 +3,7 @@ defmodule Trinity.Ops.Tasks do
   Dispatch layer for the `mix trinity.*` task modules.
   """
 
+  alias SelfHostedInferenceBumblebee.Runtime.Preflight
   alias Trinity.Ops.{CommandSpec, Gates, NativeTasks}
 
   @spec run(CommandSpec.task_key(), [String.t()]) :: :ok
@@ -27,11 +28,8 @@ defmodule Trinity.Ops.Tasks do
   end
 
   defp check_requirement!("cuda") do
-    {target, 0} = System.cmd("sh", ["-c", "printf %s \"${XLA_TARGET:-}\""])
-
-    unless target == "cuda12" do
-      Mix.raise("XLA_TARGET=cuda12 is required for CUDA runtime checks")
-    end
+    Preflight.require_cuda!()
+    :ok
   end
 
   defp check_requirement!("artifact"), do: :ok

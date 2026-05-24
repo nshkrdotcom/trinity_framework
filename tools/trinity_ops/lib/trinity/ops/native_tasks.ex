@@ -38,6 +38,7 @@ defmodule Trinity.Ops.NativeTasks do
   @default_large_tensor_out "tmp/sakana_parity/large_tensor_chunks/elixir_large_tensor_chunks.json"
   @default_parity_sample_out "tmp/sakana_parity/elixir_sample_trace.json"
   @default_router_trace_schema "trinity_sakana_router_trace.v1"
+  @default_router_vector_tensor "trinity_router_es_vector"
   @summary_schema_version 1
   @tail_bytes 4096
 
@@ -183,7 +184,7 @@ defmodule Trinity.Ops.NativeTasks do
     ensure_regular_file!(path, "router vector")
     kv("Source vector sha256", ArtifactIO.file_sha256!(path))
 
-    vector = SVD.load_router_vector!(path)
+    vector = SVD.load_router_vector!(path, default_router_vector_tensor())
     split = SVD.split_router_vector(vector, 9_216, 1_024, 10)
 
     ensure_shape!(vector, {19_456}, "router vector")
@@ -225,7 +226,7 @@ defmodule Trinity.Ops.NativeTasks do
     banner("TRINITY HITL HEAD ROUTE CHECK")
     Profile.put_default_backend!(:cuda_exla)
 
-    vector = SVD.load_router_vector!(default_router_vector_path())
+    vector = SVD.load_router_vector!(default_router_vector_path(), default_router_vector_tensor())
     split = SVD.split_router_vector(vector, 9_216, 1_024, 10)
 
     {:ok, head_state} =
@@ -1430,7 +1431,7 @@ defmodule Trinity.Ops.NativeTasks do
 
   defp native_router_vector_variant(path, true) do
     if File.regular?(path) do
-      vector = SVD.load_router_vector!(path)
+      vector = SVD.load_router_vector!(path, default_router_vector_tensor())
 
       split =
         SVD.split_router_vector(
@@ -1793,6 +1794,8 @@ defmodule Trinity.Ops.NativeTasks do
       "priv/sakana_trinity/artifacts/trinity_router_es_vector.safetensors"
     )
   end
+
+  defp default_router_vector_tensor, do: @default_router_vector_tensor
 
   defp default_reference_manifest_path do
     Path.join(

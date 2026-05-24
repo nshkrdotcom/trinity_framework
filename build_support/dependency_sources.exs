@@ -3,7 +3,26 @@ defmodule DependencySources do
 
   @helper_version 2
   @source_keys [:path, :github, :hex]
+  @source_string_keys %{"path" => :path, "github" => :github, "hex" => :hex}
   @github_option_keys [:branch, :ref, :tag, :subdir]
+  @github_option_string_keys %{
+    "branch" => :branch,
+    "ref" => :ref,
+    "subdir" => :subdir,
+    "tag" => :tag
+  }
+  @app_string_keys %{
+    "aitrace" => :aitrace,
+    "crucible_factorization" => :crucible_factorization,
+    "crucible_model_registry" => :crucible_model_registry,
+    "crucible_safetensors" => :crucible_safetensors,
+    "crucible_tensor_patch" => :crucible_tensor_patch,
+    "execution_plane" => :execution_plane,
+    "execution_plane_process" => :execution_plane_process,
+    "inference" => :inference,
+    "self_hosted_inference_bumblebee" => :self_hosted_inference_bumblebee,
+    "self_hosted_inference_core" => :self_hosted_inference_core
+  }
 
   def helper_version, do: @helper_version
 
@@ -77,7 +96,13 @@ defmodule DependencySources do
   end
 
   defp normalize_app!(app) when is_atom(app), do: app
-  defp normalize_app!(app) when is_binary(app), do: String.to_atom(app)
+
+  defp normalize_app!(app) when is_binary(app) do
+    case Map.fetch(@app_string_keys, app) do
+      {:ok, normalized} -> normalized
+      :error -> raise ArgumentError, "unsupported dependency app #{inspect(app)}"
+    end
+  end
 
   defp normalize_dep_config!(config) when is_map(config), do: config
   defp normalize_dep_config!(config) when is_list(config), do: Map.new(config)
@@ -244,10 +269,22 @@ defmodule DependencySources do
   defp keyword_options(_opts), do: []
 
   defp normalize_source!(source) when source in @source_keys, do: source
-  defp normalize_source!(source) when is_binary(source), do: String.to_existing_atom(source)
+
+  defp normalize_source!(source) when is_binary(source) do
+    case Map.fetch(@source_string_keys, source) do
+      {:ok, normalized} -> normalized
+      :error -> raise ArgumentError, "unsupported dependency source #{inspect(source)}"
+    end
+  end
 
   defp normalize_option_key(key) when is_atom(key), do: key
-  defp normalize_option_key(key) when is_binary(key), do: String.to_existing_atom(key)
+
+  defp normalize_option_key(key) when is_binary(key) do
+    case Map.fetch(@github_option_string_keys, key) do
+      {:ok, normalized} -> normalized
+      :error -> raise ArgumentError, "unsupported GitHub dependency option #{inspect(key)}"
+    end
+  end
 
   defp publish_mode? do
     System.argv()
