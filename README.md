@@ -18,10 +18,10 @@ packages, single-node runtime, operator command surface, and eval example into
 one standalone checkout.
 
 The completion target for this repo is exact and testable: all functionality
-that existed on `main` in the old `~/p/g/n/trinity_coordinator` monolith must be
+that existed on `main` in the old [trinity_coordinator](https://github.com/nshkrdotcom/trinity_coordinator) monolith must be
 ported here, adapted to the new architecture, and runnable from this root unless
 the behavior is intentionally documented as a compatibility-only shim. The old
-`trinity_coordinator` repo should end as a to-be-deprecated monolith hook-up for
+[trinity_coordinator](https://github.com/nshkrdotcom/trinity_coordinator) repo should end as a to-be-deprecated monolith hook-up for
 existing consumers, not as the owner of new runtime behavior.
 
 ## Status
@@ -350,6 +350,12 @@ test/                           Root aggregate and drift tests
 - `HF_TOKEN` or equivalent HuggingFace auth only when publishing bundles.
 - Python, PyTorch, Transformers, NumPy, and safetensors only for Python parity
   reconstruction and original Sakana script workflows.
+
+## References
+
+[1] Jinglue Xu, Qi Sun, Peter Schwendeman, Stefan Nielsen, Edoardo
+Cetin, and Yujin Tang. *TRINITY: An Evolved LLM Coordinator*.
+arXiv:2512.04695, 2026. <https://arxiv.org/abs/2512.04695>
 
 ## License
 
