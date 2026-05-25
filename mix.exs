@@ -95,6 +95,7 @@ defmodule TrinityFramework.MixProject do
       dep(:execution_plane),
       dep(:execution_plane_process),
       dep(:inference),
+      dep(:outer_brain_context_abi),
       dep(:aitrace)
     ]
   end
@@ -131,6 +132,7 @@ defmodule TrinityFramework.MixProject do
         "monorepo.docs --warnings-as-errors",
         &weld_verify/1
       ],
+      "weld.verify": [&weld_verify/1],
       "docs.root": ["docs"]
     ] ++ monorepo_aliases
   end
@@ -141,6 +143,8 @@ defmodule TrinityFramework.MixProject do
     if invalid != [] do
       Mix.raise("Usage: mix ci [--artifact name]")
     end
+
+    Mix.Task.run("deps.loadpaths", [])
 
     "build_support/weld.exs"
     |> Weld.Plan.build!(artifact: opts[:artifact])

@@ -17,8 +17,14 @@ defmodule TrinityFramework.Build.WeldContract do
     :execution_plane,
     :execution_plane_process,
     :inference,
+    :outer_brain_context_abi,
+    :mezzanine_ai_execution_engine,
     :aitrace
   ]
+
+  @manifest_dependency_opts %{
+    outer_brain_context_abi: [override: true]
+  }
 
   @artifact_docs [
     "README.md",
@@ -108,7 +114,9 @@ defmodule TrinityFramework.Build.WeldContract do
   defp manifest_dependency(app) do
     config = Map.fetch!(dependency_configs(), app)
     github = Map.fetch!(config, :github)
-    [opts: github_opts(github)]
+    extra_opts = Map.get(@manifest_dependency_opts, app, [])
+
+    [opts: Keyword.merge(github_opts(github), extra_opts)]
   end
 
   defp dependency_configs do

@@ -1,6 +1,11 @@
+unless Code.ensure_loaded?(DependencySources) do
+  Code.require_file("../../build_support/dependency_sources.exs", __DIR__)
+end
+
 defmodule Trinity.CoordinatorCore.MixProject do
   use Mix.Project
 
+  @repo_root Path.expand("../..", __DIR__)
   @source_url "https://github.com/nshkrdotcom/trinity_framework"
 
   def project do
@@ -18,7 +23,7 @@ defmodule Trinity.CoordinatorCore.MixProject do
 
   def application do
     [
-      extra_applications: [:logger]
+      extra_applications: [:crypto, :logger]
     ]
   end
 
@@ -36,7 +41,8 @@ defmodule Trinity.CoordinatorCore.MixProject do
   defp deps do
     [
       {:trinity_contracts, path: "../trinity_contracts"},
-      {:trinity_sakana_contracts, path: "../trinity_sakana_contracts"}
+      {:trinity_sakana_contracts, path: "../trinity_sakana_contracts"},
+      DependencySources.dep(:mezzanine_ai_execution_engine, @repo_root)
     ] ++ quality_deps()
   end
 
