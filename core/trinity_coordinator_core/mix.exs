@@ -23,7 +23,7 @@ defmodule Trinity.CoordinatorCore.MixProject do
 
   def application do
     [
-      extra_applications: [:crypto, :logger]
+      extra_applications: [:crypto, :logger, :outer_brain_context_abi]
     ]
   end
 
@@ -42,7 +42,8 @@ defmodule Trinity.CoordinatorCore.MixProject do
     [
       {:trinity_contracts, path: "../trinity_contracts"},
       {:trinity_sakana_contracts, path: "../trinity_sakana_contracts"},
-      DependencySources.dep(:mezzanine_ai_execution_engine, @repo_root)
+      DependencySources.dep(:mezzanine_ai_execution_engine, @repo_root),
+      DependencySources.dep(:outer_brain_context_abi, @repo_root)
     ] ++ quality_deps()
   end
 

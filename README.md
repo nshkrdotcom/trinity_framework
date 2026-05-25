@@ -47,6 +47,13 @@ This repo is also the integration point for the nshkr stack. It must be able to
 run standalone and sit inside larger product, governance, execution, and testing
 flows through explicit package contracts and governed provider boundaries.
 
+## Mezzanine Router Adapter
+
+`Trinity.MezzanineRouterAdapter` in `core/trinity_coordinator_core` implements
+`Mezzanine.AIExecution.RouterAdapter` for the NSHKR router fabric. It returns
+route decision refs and bounded route receipts to Mezzanine; it does not
+execute models, grant authority, or mutate product projections.
+
 ## Quickstart
 
 ```bash

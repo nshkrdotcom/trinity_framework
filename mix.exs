@@ -307,6 +307,7 @@ defmodule TrinityFramework.MixProject do
         "guides/current_direction.md",
         "guides/system_architecture.md",
         "guides/service_buildout.md",
+        "guides/router_fabric.md",
         "guides/operations_qc.md",
         "guides/artifact_distribution.md",
         "guides/artifacts_and_export.md",
@@ -338,7 +339,8 @@ defmodule TrinityFramework.MixProject do
         "System Architecture": [
           "guides/system_architecture.md",
           "guides/runtime_profiles.md",
-          "guides/service_buildout.md"
+          "guides/service_buildout.md",
+          "guides/router_fabric.md"
         ],
         "Artifacts & Pipelines": [
           "guides/artifacts_and_export.md",
