@@ -15,6 +15,12 @@ route plan refs, candidate model class refs, trace refs, and bounded failure
 reason codes. It does not execute model calls, admit workflows, grant
 authority, or project product state.
 
+Model classes and model profiles are distinct. The adapter resolves
+`model_class_ref` values through `model_class_profile_map` supplied by the
+request, adapter options, or deterministic defaults. The selected output is a
+`model-profile://...` ref; unmapped classes are rejected with
+`trinity.route.model_class_unmapped.v1`.
+
 ## Standalone And Stack Modes
 
 Standalone TRINITY commands continue to use the local runtime profiles and

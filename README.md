@@ -54,6 +54,11 @@ flows through explicit package contracts and governed provider boundaries.
 route decision refs and bounded route receipts to Mezzanine; it does not
 execute models, grant authority, or mutate product projections.
 
+The adapter maps abstract model class refs to concrete model profile refs
+through an explicit class-profile policy map. A route request that names a
+model class without an allowed profile mapping fails closed with a bounded
+route failure code instead of reusing the class ref as a runtime profile.
+
 ## Quickstart
 
 ```bash

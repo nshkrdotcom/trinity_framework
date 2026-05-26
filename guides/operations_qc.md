@@ -47,6 +47,10 @@ do
 done
 ```
 
+Router-fabric changes must include focused
+`core/trinity_coordinator_core` tests for class-to-profile mapping, unmapped
+class rejection, and bounded route receipt shape before root gates run.
+
 ## Heavy Gates
 
 Run these on a CUDA host with the artifact bundle materialized:
@@ -74,4 +78,3 @@ XLA_TARGET=cuda12 mix run lib/qwen_router_prompt_eval.exs -- \
 For checklist-driven work, commit and push at phase boundaries. Do not leave
 generated artifact bundles staged. The large default artifact directory is
 ignored by `.gitignore`.
-
