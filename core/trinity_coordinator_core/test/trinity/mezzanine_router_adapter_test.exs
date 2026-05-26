@@ -39,6 +39,25 @@ defmodule Trinity.MezzanineRouterAdapterTest do
     assert decision.reason_codes == ["trinity.route.default_role.v1"]
   end
 
+  test "maps abstract model classes to concrete model profiles" do
+    request =
+      route_request()
+      |> Map.put(:model_class_allowlist, ["model-class://fixture"])
+      |> Map.put(:model_class_profile_map, %{
+        "model-class://fixture" => ["model-profile://fixture/worker"]
+      })
+
+    assert {:ok, decision} = MezzanineRouterAdapter.route(request)
+    assert decision.selected_model_profile_ref == "model-profile://fixture/worker"
+  end
+
+  test "rejects unmapped abstract model classes" do
+    request = Map.put(route_request(), :model_class_allowlist, ["model-class://unknown"])
+
+    assert {:error, %Failure{} = failure} = MezzanineRouterAdapter.route(request)
+    assert failure.reason_code == "trinity.route.model_class_unmapped.v1"
+  end
+
   test "rejects raw route request payloads with owner-local failure" do
     request = Map.put(route_request(), :raw_prompt, "do not carry me")
 
@@ -57,7 +76,10 @@ defmodule Trinity.MezzanineRouterAdapterTest do
       packet_hash: "sha256:#{String.duplicate("a", 64)}",
       authority_ref: "authority://router-fabric/demo",
       route_policy_ref: "route-policy://router-fabric/demo",
-      model_class_allowlist: ["model-profile://fixture/worker"],
+      model_class_allowlist: ["model-class://fixture"],
+      model_class_profile_map: %{
+        "model-class://fixture" => ["model-profile://fixture/worker"]
+      },
       trace_ref: "trace://router-fabric/demo"
     }
   end
