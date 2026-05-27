@@ -2,6 +2,7 @@
 /deps/
 /doc/
 /examples/*/doc/
+/examples/*/tmp/
 /dist/
 /tmp/
 /.dependency_sources.local.exs
