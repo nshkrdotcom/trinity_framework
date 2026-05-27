@@ -207,6 +207,9 @@ defmodule Trinity.Ops.CommandSpec do
       artifact_dir: :string,
       runtime_profile: :string,
       message: :string,
+      prompt: :string,
+      trace: :string,
+      live: :boolean,
       out: :string,
       trace_out: :string
     ]
@@ -218,6 +221,9 @@ defmodule Trinity.Ops.CommandSpec do
       runtime_profile: :string,
       case: :keep,
       out: :string,
+      trace: :keep,
+      live: :boolean,
+      limit: :integer,
       no_assert: :boolean,
       max_cases: :integer
     ]

@@ -389,3 +389,18 @@ arXiv:2512.04695, 2026. <https://arxiv.org/abs/2512.04695>
 ## License
 
 MIT.
+
+## V4 Status
+
+Status: `trinity-live-gate-passing`.
+
+The Crucible operator tasks support offline v4 trace replay and native hosted
+runtime live mode:
+
+```bash
+mix trinity.crucible.inspect --trace runs/synthetic_python_gpt2_trace.jsonl
+TRINITY_CRUCIBLE_LIVE=true mix trinity.crucible.inspect --live --prompt "Hi"
+TRINITY_CRUCIBLE_LIVE=true mix trinity.crucible.matrix_eval --live --limit 3
+```
+
+See [Trinity Live Inspect](guides/trinity_live_inspect.md).

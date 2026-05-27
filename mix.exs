@@ -313,6 +313,7 @@ defmodule TrinityFramework.MixProject do
         "guides/current_direction.md",
         "guides/system_architecture.md",
         "guides/crucible_path.md",
+        "guides/trinity_live_inspect.md",
         "guides/service_buildout.md",
         "guides/router_fabric.md",
         "guides/operations_qc.md",
@@ -346,6 +347,7 @@ defmodule TrinityFramework.MixProject do
         "System Architecture": [
           "guides/system_architecture.md",
           "guides/crucible_path.md",
+          "guides/trinity_live_inspect.md",
           "guides/runtime_profiles.md",
           "guides/service_buildout.md",
           "guides/router_fabric.md"

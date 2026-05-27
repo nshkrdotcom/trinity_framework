@@ -53,6 +53,7 @@ defmodule TrinityFramework.Build.WeldContract do
     "guides/stage_checks_and_tolerances.md",
     "guides/svd_generation_runbook.md",
     "guides/provider_service_hardening.md",
+    "guides/trinity_live_inspect.md",
     "guides/troubleshooting.md",
     "docs/agent_slot_provider_mapping.md",
     "docs/bumblebee_unpin_playbook.md",

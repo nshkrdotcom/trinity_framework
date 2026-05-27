@@ -5,12 +5,13 @@ defmodule Trinity.Crucible.TraceAdapter do
 
   alias CruciblePolicy.RouteDecision, as: CrucibleRouteDecision
   alias CrucibleSignal.{SignalRef, TensorSummary}
-  alias CrucibleSignalTrace.Export.AITrace.V1, as: AITraceExport
   alias CrucibleSignalTrace.{ForwardTrace, JSONL, LayerTrajectory, SignalRecord}
   alias CrucibleTap.TapPlan
 
   alias Trinity.Coordinator.{RoleInjector, RouteLogits, TraceEvent}
   alias Trinity.Crucible.RequestContext
+
+  @aitrace_export Module.concat([CrucibleSignalTrace.Export, :AITrace, :V1])
 
   @spec from_logits(RouteLogits.t(), [map()] | RequestContext.t(), TapPlan.t() | nil, keyword()) ::
           ForwardTrace.t()
@@ -129,7 +130,7 @@ defmodule Trinity.Crucible.TraceAdapter do
 
   @spec to_aitrace_evidence(ForwardTrace.t()) :: {:ok, map()} | {:error, term()}
   def to_aitrace_evidence(%ForwardTrace{} = trace) do
-    AITraceExport.to_evidence(trace)
+    @aitrace_export.to_evidence(trace)
   end
 
   defp request_context(%RequestContext{} = context, _opts), do: context

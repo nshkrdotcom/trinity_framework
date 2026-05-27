@@ -50,8 +50,10 @@ defmodule Trinity.Ops.MixProject do
       dep(:crucible_factorization),
       dep(:crucible_model_registry),
       dep(:crucible_policy),
+      dep(:crucible_bumblebee),
       dep(:crucible_signal_trace),
       dep(:crucible_tap),
+      dep(:self_hosted_inference_core),
       dep(:self_hosted_inference_bumblebee),
       {:hf_hub, "~> 0.3"},
       {:jason, "~> 1.4"}

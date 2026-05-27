@@ -7,8 +7,10 @@ defmodule Trinity.Ops.NativeTasks do
   call back into `trinity_coordinator`.
   """
 
+  alias Crucible.Policy.PolicyPlan, as: CruciblePolicyPlan
   alias CrucibleFactorization.SVD
   alias CrucibleModelRegistry.Pins.{ArtifactPin, Fetcher, Verifier}
+  alias CrucibleSignalTrace.Ingest, as: CrucibleTraceIngest
 
   alias SelfHostedInferenceBumblebee.{
     Extractor,
@@ -19,6 +21,7 @@ defmodule Trinity.Ops.NativeTasks do
   }
 
   alias SelfHostedInferenceBumblebee.Runtime.{Preflight, Profile}
+  alias SelfHostedInferenceCore.CrucibleRuntime
   alias Trinity.Bridge.Trace.JsonlSink
   alias Trinity.Coordinator.TraceEvent
   alias Trinity.Crucible.{DiffReport, TraceAdapter}
@@ -213,6 +216,19 @@ defmodule Trinity.Ops.NativeTasks do
   defp crucible_inspect(opts) do
     start_app!()
 
+    cond do
+      trace_path = Keyword.get(opts, :trace) ->
+        crucible_inspect_trace(trace_path, opts)
+
+      Keyword.get(opts, :live, false) ->
+        crucible_inspect_live(opts)
+
+      true ->
+        crucible_inspect_mock(opts)
+    end
+  end
+
+  defp crucible_inspect_mock(opts) do
     artifact_dir = Keyword.get(opts, :artifact_dir, default_artifact_dir())
     runtime_profile = runtime_profile(Keyword.get(opts, :runtime_profile), :mock_tiny)
     message = Keyword.get(opts, :message, @default_message)
@@ -257,9 +273,69 @@ defmodule Trinity.Ops.NativeTasks do
     pass("TRINITY CRUCIBLE INSPECT")
   end
 
+  defp crucible_inspect_trace(trace_path, opts) do
+    banner("TRINITY CRUCIBLE TRACE INSPECT")
+
+    trace = load_v4_trace!(trace_path)
+    decision = CruciblePolicyPlan.evaluate(trace)
+
+    payload = crucible_v4_payload(:trace, trace, decision, trace_path)
+
+    if out = Keyword.get(opts, :out) do
+      ArtifactIO.write_json!(out, normalize_for_json(payload))
+      kv("Wrote inspect report", out)
+    end
+
+    print_payload(payload)
+    pass("TRINITY CRUCIBLE TRACE INSPECT")
+  end
+
+  defp crucible_inspect_live(opts) do
+    require_crucible_live!()
+
+    banner("TRINITY CRUCIBLE LIVE INSPECT")
+
+    prompt = Keyword.get(opts, :prompt) || Keyword.get(opts, :message) || "Hi"
+    id = :"trinity-crucible-live-#{System.unique_integer([:positive])}"
+
+    {:ok, pid} = CrucibleRuntime.start_child(id: id, live_model?: true)
+    {:ok, lease} = CrucibleRuntime.lease(pid, owner_ref: "trinity.crucible.inspect")
+
+    {:ok, trace} =
+      CrucibleRuntime.forward(pid, nil, %{prompt: prompt}, trace_name: "inspect_live")
+
+    :ok = CrucibleRuntime.release(lease)
+
+    decision = CruciblePolicyPlan.evaluate(trace)
+
+    payload =
+      crucible_v4_payload(:live, trace, decision, "tmp/crucible_v4/inspect_live.trace.jsonl")
+
+    if out = Keyword.get(opts, :out) do
+      ArtifactIO.write_json!(out, normalize_for_json(payload))
+      kv("Wrote live inspect report", out)
+    end
+
+    print_payload(payload)
+    pass("TRINITY CRUCIBLE LIVE INSPECT")
+  end
+
   defp crucible_matrix_eval(opts) do
     start_app!()
 
+    cond do
+      Keyword.get(opts, :live, false) ->
+        crucible_matrix_eval_live(opts)
+
+      Keyword.get_values(opts, :trace) != [] ->
+        crucible_matrix_eval_traces(opts)
+
+      true ->
+        crucible_matrix_eval_mock(opts)
+    end
+  end
+
+  defp crucible_matrix_eval_mock(opts) do
     artifact_dir = Keyword.get(opts, :artifact_dir, default_artifact_dir())
     runtime_profile = runtime_profile(Keyword.get(opts, :runtime_profile), :mock_tiny)
     selected_ids = Keyword.get_values(opts, :case)
@@ -329,6 +405,134 @@ defmodule Trinity.Ops.NativeTasks do
     end
 
     pass("TRINITY CRUCIBLE MATRIX EVAL")
+  end
+
+  defp crucible_matrix_eval_traces(opts) do
+    trace_paths = Keyword.get_values(opts, :trace)
+    out = Keyword.get(opts, :out, "tmp/trinity_crucible/matrix_eval_traces.json")
+
+    rows =
+      Enum.map(trace_paths, fn path ->
+        trace = load_v4_trace!(path)
+        decision = CruciblePolicyPlan.evaluate(trace)
+
+        %{
+          mode: :trace,
+          trace_path: path,
+          trace_id: trace.trace_id,
+          selected_policy: decision.selected_policy,
+          selected_action: decision.selected_action,
+          skipped_policies: decision.skipped_policies
+        }
+      end)
+
+    File.mkdir_p!(Path.dirname(out))
+
+    ArtifactIO.write_json!(
+      out,
+      normalize_for_json(%{schema: "trinity.crucible.matrix_eval.v4", rows: rows})
+    )
+
+    print_payload(%{ok: true, mode: :trace, rows: rows, out: out})
+    pass("TRINITY CRUCIBLE MATRIX EVAL TRACE")
+  end
+
+  defp crucible_matrix_eval_live(opts) do
+    require_crucible_live!()
+
+    limit = Keyword.get(opts, :limit) || Keyword.get(opts, :max_cases) || 3
+    cases = prompt_eval_cases([], limit)
+    out = Keyword.get(opts, :out, "tmp/trinity_crucible/matrix_eval_live.json")
+    id = :"trinity-crucible-matrix-live-#{System.unique_integer([:positive])}"
+
+    banner("TRINITY CRUCIBLE MATRIX EVAL LIVE")
+    kv("Cases", length(cases))
+
+    {:ok, pid} = CrucibleRuntime.start_child(id: id, live_model?: true)
+    {:ok, lease} = CrucibleRuntime.lease(pid, owner_ref: "trinity.crucible.matrix_eval")
+
+    rows =
+      cases
+      |> Enum.with_index()
+      |> Enum.map(fn {case_spec, index} ->
+        {:ok, trace} =
+          CrucibleRuntime.forward(pid, nil, %{prompt: case_prompt(case_spec)},
+            trace_name: "matrix_eval_live_#{index}"
+          )
+
+        decision = CruciblePolicyPlan.evaluate(trace)
+
+        %{
+          id: Map.fetch!(case_spec, "id"),
+          trace_id: trace.trace_id,
+          trace_path: "tmp/crucible_v4/matrix_eval_live_#{index}.trace.jsonl",
+          selected_policy: decision.selected_policy,
+          selected_action: decision.selected_action,
+          hidden_state_available?: Enum.any?(trace.signals, &(&1.signal_type == :hidden_state)),
+          skipped_policies: decision.skipped_policies
+        }
+      end)
+
+    :ok = CrucibleRuntime.release(lease)
+
+    report = %{
+      schema: "trinity.crucible.matrix_eval_live.v4",
+      ok: true,
+      mode: :live,
+      rows: rows,
+      route_margin_histogram: Enum.frequencies_by(rows, & &1.selected_action),
+      hidden_state_availability: %{
+        available: Enum.count(rows, & &1.hidden_state_available?),
+        unavailable: Enum.count(rows, &(not &1.hidden_state_available?))
+      }
+    }
+
+    File.mkdir_p!(Path.dirname(out))
+    ArtifactIO.write_json!(out, normalize_for_json(report))
+    print_payload(report)
+    pass("TRINITY CRUCIBLE MATRIX EVAL LIVE")
+  end
+
+  defp crucible_v4_payload(mode, trace, decision, trace_path) do
+    %{
+      ok: true,
+      mode: mode,
+      provider_kind: trace.provider_kind,
+      model_id: trace.model_id,
+      trace_path: trace_path,
+      route_decision: %{
+        assigned_role: decision.selected_action,
+        decision_source: decision.selected_policy,
+        confidence: decision.confidence,
+        target_model: nil
+      },
+      policy_used: decision.selected_policy,
+      skipped_policies:
+        Enum.map(decision.skipped_policies, fn skipped ->
+          {skipped.policy, skipped.reason}
+        end),
+      unsupported_capabilities: unsupported_capabilities(trace),
+      evidence: decision.evidence
+    }
+  end
+
+  defp unsupported_capabilities(%{capability_report: %{unsupported: unsupported}})
+       when is_list(unsupported),
+       do: unsupported
+
+  defp unsupported_capabilities(_trace), do: []
+
+  @spec load_v4_trace!(String.t()) :: Crucible.ForwardTrace.t()
+  defp load_v4_trace!(path), do: CrucibleTraceIngest.from_jsonl!(path, [])
+
+  defp case_prompt(case_spec) do
+    case_spec
+    |> Map.get("messages", [])
+    |> case do
+      [%{"content" => content} | _rest] -> content
+      [content | _rest] when is_binary(content) -> content
+      _other -> @default_message
+    end
   end
 
   defp hitl_mock_loop(opts) do
@@ -2133,6 +2337,8 @@ defmodule Trinity.Ops.NativeTasks do
 
   defp pass(label), do: Mix.shell().info("PASS #{label}")
 
+  defp print_payload(payload), do: Mix.shell().info(inspect(payload, pretty: true))
+
   defp format_value(value) when is_binary(value), do: value
   defp format_value(value), do: inspect(value)
 
@@ -2145,6 +2351,12 @@ defmodule Trinity.Ops.NativeTasks do
     do: (value |> String.trim() |> String.downcase()) in ["1", "true", "yes"]
 
   defp boolish(value), do: not is_nil(value) and value != false
+
+  defp require_crucible_live! do
+    unless Application.get_env(:trinity_ops, :crucible_live_enabled?, false) do
+      Mix.raise("Set TRINITY_CRUCIBLE_LIVE=true to run --live")
+    end
+  end
 
   defp generated_ref(prefix), do: "#{prefix}:#{System.unique_integer([:positive])}"
 
