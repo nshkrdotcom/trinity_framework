@@ -61,3 +61,19 @@ Normal mode stores native compiler/runtime logs under:
 tmp/examples/qwen_router_prompt_eval.native.log
 ```
 
+## Root Eval Wrapper
+
+The framework root also exposes smoke-friendly route eval wrappers:
+
+```bash
+mix trinity.eval qwen_router_prompt_eval
+mix trinity.eval qwen_router_prompt_eval --via crucible
+mix trinity.crucible.matrix_eval --runtime-profile mock_tiny
+```
+
+`mix trinity.eval qwen_router_prompt_eval --via crucible` uses the Crucible
+route adapter and prints the same strict route-decision acceptance criteria as
+`mix trinity.crucible.matrix_eval`. The diff report compares route decisions,
+confidence bands, trajectory margins, safety regressions, format strictness,
+and warmed post-processing overhead; it does not compare generated text across
+different generators.

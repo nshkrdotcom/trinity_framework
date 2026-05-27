@@ -41,6 +41,8 @@ defmodule Trinity.Bridge.Trace.MixProject do
   defp deps do
     [
       {:trinity_contracts, path: "../../core/trinity_contracts"},
+      dep(:crucible_signal),
+      dep(:crucible_signal_trace),
       dep(:aitrace)
     ] ++ quality_deps()
   end

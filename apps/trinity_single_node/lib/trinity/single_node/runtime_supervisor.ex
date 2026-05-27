@@ -21,6 +21,7 @@ defmodule Trinity.SingleNode.RuntimeSupervisor do
     TraceEvent
   }
 
+  alias Trinity.Crucible.{DecisionAdapter, RequestContext, TapPlanBuilder, TraceAdapter}
   alias Trinity.SingleNode.Config
 
   @default_name __MODULE__
@@ -66,6 +67,17 @@ defmodule Trinity.SingleNode.RuntimeSupervisor do
 
   def route(messages, opts) when is_list(messages) do
     opts = normalize_opts(opts)
+
+    case route_path(opts) do
+      :crucible -> route_via_crucible(messages, opts)
+      :legacy_route_logits -> route_via_legacy_logits(messages, opts)
+      other -> {:error, {:unsupported_route_path, other}}
+    end
+  end
+
+  def route(_messages, _opts), do: {:error, :invalid_messages}
+
+  defp route_via_legacy_logits(messages, opts) do
     plan = extraction_plan(messages, opts)
 
     with {:ok, runtime} <- runtime_for_plan(plan, opts),
@@ -83,7 +95,31 @@ defmodule Trinity.SingleNode.RuntimeSupervisor do
     end
   end
 
-  def route(_messages, _opts), do: {:error, :invalid_messages}
+  defp route_via_crucible(messages, opts) do
+    plan = extraction_plan(messages, opts)
+
+    with {:ok, runtime} <- runtime_for_plan(plan, opts),
+         {:ok, logits} <- RuntimeAdapter.route(runtime, plan, route_opts(opts)),
+         context <- request_context(messages, opts),
+         {:ok, tap_plan} <- TapPlanBuilder.build(context, crucible_runtime_profile(opts)),
+         trace <- TraceAdapter.from_logits(logits, context, tap_plan, trace_opts(opts)),
+         crucible_decision <- TraceAdapter.route_decision_from_logits(logits, trace),
+         {:ok, decision} <- derive_crucible_decision(crucible_decision, context, logits, opts),
+         :ok <- maybe_trace_crucible(trace, opts),
+         :ok <- maybe_trace_route(decision, opts) do
+      {:ok,
+       %{
+         runtime: runtime,
+         logits: logits,
+         decision: decision,
+         router_decision: RouteDecision.to_router_decision(decision),
+         trace_path: Keyword.get(opts, :trace_path),
+         crucible_trace: trace,
+         crucible_decision: crucible_decision,
+         tap_plan: tap_plan
+       }}
+    end
+  end
 
   @spec dispatch(RouteDecision.t() | map(), [map()], keyword()) ::
           {:ok, Trinity.Coordinator.AgentCallReceipt.t()} | {:error, term()}
@@ -149,6 +185,21 @@ defmodule Trinity.SingleNode.RuntimeSupervisor do
     )
   end
 
+  defp derive_crucible_decision(crucible_decision, %RequestContext{} = context, logits, opts) do
+    DecisionAdapter.adapt(crucible_decision,
+      request_context: context,
+      messages_or_hash: context.messages,
+      token_count: logits.token_count,
+      runtime_profile: crucible_runtime_profile(opts),
+      coordination_run_ref: coordination_run_ref(opts),
+      trace_ref: trace_ref(opts),
+      router_artifact_ref: "crucible_policy:trinity_route_logits",
+      extractor_ref: "crucible_trace:#{trace_ref(opts)}",
+      head_ref: "crucible_policy_plan:trinity_route_logits",
+      metadata: %{runtime_profile: runtime_profile(opts), route_path: :crucible}
+    )
+  end
+
   defp maybe_trace_route(%RouteDecision{} = decision, opts) do
     case Keyword.get(opts, :trace_path) do
       path when is_binary(path) ->
@@ -205,6 +256,20 @@ defmodule Trinity.SingleNode.RuntimeSupervisor do
     end
   end
 
+  defp maybe_trace_crucible(trace, opts) do
+    case Keyword.get(opts, :trace_path) do
+      path when is_binary(path) ->
+        JsonlSink.emit_crucible_trace(trace,
+          path: path,
+          coordination_run_ref: coordination_run_ref(opts),
+          redaction_values: opts[:redaction_values] || []
+        )
+
+      _other ->
+        :ok
+    end
+  end
+
   defp agent_intent(%RouteDecision{} = decision, messages, opts) do
     %AgentCallIntent{
       intent_ref: generated_ref("agent-intent"),
@@ -231,6 +296,17 @@ defmodule Trinity.SingleNode.RuntimeSupervisor do
 
   defp route_opts(opts), do: Keyword.get(opts, :route_options, [])
 
+  defp trace_opts(opts) do
+    [
+      trace_id: trace_ref(opts),
+      trace_ref: trace_ref(opts),
+      coordination_run_ref: coordination_run_ref(opts),
+      turn: Keyword.get(opts, :turn, 0),
+      runtime_profile: runtime_profile(opts),
+      task_type: Keyword.get(opts, :task_type)
+    ]
+  end
+
   defp lease_opts(opts) do
     [
       owner_ref: Keyword.get(opts, :owner_ref, "trinity-single-node"),
@@ -254,11 +330,47 @@ defmodule Trinity.SingleNode.RuntimeSupervisor do
   defp runtime_profile_ref(profile) do
     %RuntimeProfileRef{
       name: profile,
+      kind: :legacy_route_logits,
       require_cuda?: profile == :cuda_exla,
       qwen_runtime?: profile != :mock_tiny,
       artifact_runtime?: profile != :mock_tiny,
       capabilities: %{route_logits?: true}
     }
+  end
+
+  defp crucible_runtime_profile(opts) do
+    %{
+      name: runtime_profile(opts),
+      kind: :crucible,
+      model_id: artifact_ref_string(opts),
+      capabilities: [:route_logits],
+      agent_slot_by_role: %{worker: 0, thinker: 1, verifier: 2}
+    }
+  end
+
+  defp request_context(messages, opts) do
+    RequestContext.from_messages(messages,
+      task_type: Keyword.get(opts, :task_type),
+      turn: Keyword.get(opts, :turn, 0),
+      trace_ref: trace_ref(opts),
+      coordination_run_ref: coordination_run_ref(opts),
+      runtime_profile: crucible_runtime_profile(opts),
+      capabilities: [:route_logits],
+      metadata: %{route_path: route_path(opts)}
+    )
+  end
+
+  defp route_path(opts) do
+    case Keyword.get(opts, :via, Keyword.get(opts, :route_path, :legacy_route_logits)) do
+      :legacy -> :legacy_route_logits
+      :legacy_route_logits -> :legacy_route_logits
+      "legacy" -> :legacy_route_logits
+      "legacy_route_logits" -> :legacy_route_logits
+      "route_logits" -> :legacy_route_logits
+      :crucible -> :crucible
+      "crucible" -> :crucible
+      other -> other
+    end
   end
 
   defp adapter_ref(:mock_tiny, opts) do

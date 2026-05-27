@@ -12,7 +12,8 @@ defmodule TrinityFramework.Build.WorkspaceContract do
     "bridges/trinity_bridge_trace",
     "apps/trinity_single_node",
     "tools/trinity_ops",
-    "examples/qwen_router_prompt_eval"
+    "examples/qwen_router_prompt_eval",
+    "examples/crucible_route"
   ]
   @active_project_globs [
     ".",
@@ -25,7 +26,8 @@ defmodule TrinityFramework.Build.WorkspaceContract do
     "bridges/trinity_bridge_trace",
     "apps/trinity_single_node",
     "tools/trinity_ops",
-    "examples/qwen_router_prompt_eval"
+    "examples/qwen_router_prompt_eval",
+    "examples/crucible_route"
   ]
 
   def package_paths, do: @package_paths

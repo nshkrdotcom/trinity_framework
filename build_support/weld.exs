@@ -12,6 +12,11 @@ defmodule TrinityFramework.Build.WeldContract do
     :crucible_factorization,
     :crucible_tensor_patch,
     :crucible_model_registry,
+    :crucible_signal,
+    :crucible_tap,
+    :crucible_signal_trace,
+    :crucible_bumblebee,
+    :crucible_policy,
     :self_hosted_inference_core,
     :self_hosted_inference_bumblebee,
     :execution_plane,
@@ -23,6 +28,11 @@ defmodule TrinityFramework.Build.WeldContract do
   ]
 
   @manifest_dependency_opts %{
+    crucible_bumblebee: [override: true],
+    crucible_policy: [override: true],
+    crucible_signal: [override: true],
+    crucible_signal_trace: [override: true],
+    crucible_tap: [override: true],
     outer_brain_context_abi: [override: true]
   }
 
@@ -31,6 +41,7 @@ defmodule TrinityFramework.Build.WeldContract do
     "CHANGELOG.md",
     "guides/onboarding.md",
     "guides/current_direction.md",
+    "guides/crucible_path.md",
     "guides/system_architecture.md",
     "guides/service_buildout.md",
     "guides/operations_qc.md",

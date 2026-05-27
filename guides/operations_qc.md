@@ -24,7 +24,9 @@ mix trinity.env.check
 mix help --search trinity
 ```
 
-`mix help --search trinity` must list 17 commands.
+`mix help --search trinity` must list 20 commands, including
+`mix trinity.crucible.inspect`, `mix trinity.crucible.matrix_eval`, and
+`mix trinity.eval`.
 
 ## Package Gates
 
@@ -41,7 +43,8 @@ for app in \
   bridges/trinity_bridge_trace \
   apps/trinity_single_node \
   tools/trinity_ops \
-  examples/qwen_router_prompt_eval
+  examples/qwen_router_prompt_eval \
+  examples/crucible_route
 do
   (cd "$app" && mix ci)
 done

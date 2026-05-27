@@ -41,6 +41,7 @@ defmodule Trinity.Ops.MixProject do
   defp deps do
     [
       {:trinity_single_node, path: "../../apps/trinity_single_node"},
+      {:trinity_coordinator_core, path: "../../core/trinity_coordinator_core"},
       {:trinity_sakana_pipeline, path: "../../core/trinity_sakana_pipeline"},
       {:trinity_bridge_self_hosted_inference,
        path: "../../bridges/trinity_bridge_self_hosted_inference"},
@@ -48,6 +49,9 @@ defmodule Trinity.Ops.MixProject do
       {:trinity_bridge_trace, path: "../../bridges/trinity_bridge_trace"},
       dep(:crucible_factorization),
       dep(:crucible_model_registry),
+      dep(:crucible_policy),
+      dep(:crucible_signal_trace),
+      dep(:crucible_tap),
       dep(:self_hosted_inference_bumblebee),
       {:hf_hub, "~> 0.3"},
       {:jason, "~> 1.4"}

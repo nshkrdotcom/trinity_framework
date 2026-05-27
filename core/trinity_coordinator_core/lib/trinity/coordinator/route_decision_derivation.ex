@@ -5,6 +5,7 @@ defmodule Trinity.Coordinator.RouteDecisionDerivation do
 
   alias CruciblePolicy.RouteDecision, as: CrucibleRouteDecision
   alias Trinity.Coordinator.{RoleInjector, RouteDecision, RouteLogits}
+  alias Trinity.Crucible.DecisionAdapter
 
   @spec from_logits(RouteLogits.t(), [map()] | String.t() | nil, keyword() | map()) ::
           {:ok, RouteDecision.t()} | {:error, term()}
@@ -38,50 +39,12 @@ defmodule Trinity.Coordinator.RouteDecisionDerivation do
         messages_or_hash \\ nil,
         attrs \\ []
       ) do
-    attrs = attrs_map(attrs)
-    decision = crucible_decision.decision
-    role_name = RoleInjector.role_name(crucible_decision.selected_target)
-    selected_role_id = RoleInjector.role_id(role_name) || 0
-    selected_agent_id = fetch(attrs, :selected_agent_id, fetch(attrs, :agent_id, 0))
-    trace_id = decision && decision.trace_id
+    attrs =
+      attrs
+      |> attrs_map()
+      |> Map.put_new(:messages_or_hash, messages_or_hash)
 
-    logits = %RouteLogits{
-      role_logits: nil,
-      agent_logits: nil,
-      selected_role_id: selected_role_id,
-      selected_agent_id: selected_agent_id,
-      token_count: 0,
-      transcript_hash: transcript_hash(messages_or_hash, nil),
-      route_hash_inputs: %{
-        "selected_target" => Atom.to_string(crucible_decision.selected_target),
-        "selected_model" => inspect(crucible_decision.selected_model),
-        "trace_id" => trace_id
-      },
-      backend_label: :crucible_policy,
-      runtime_profile: :crucible_forward_pass,
-      margins: %{policy_confidence: decision && decision.confidence}
-    }
-
-    from_logits(logits, messages_or_hash,
-      router_decision_ref: fetch(attrs, :router_decision_ref, decision_ref(decision)),
-      coordination_run_ref:
-        fetch(attrs, :coordination_run_ref, generated_ref("coordination-run")),
-      router_artifact_ref: fetch(attrs, :router_artifact_ref, "crucible-policy:first-slice"),
-      extractor_ref: fetch(attrs, :extractor_ref, "crucible-forward-pass"),
-      head_ref: fetch(attrs, :head_ref, "crucible-policy"),
-      selected_role_ref: fetch(attrs, :selected_role_ref, "role:#{selected_role_id}"),
-      confidence_band: fetch(attrs, :confidence_band, confidence_band_from_confidence(decision)),
-      role_name: fetch(attrs, :role_name, role_name),
-      trace_ref: fetch(attrs, :trace_ref, trace_id),
-      route_hash: fetch(attrs, :route_hash, hash_term({:crucible_route, crucible_decision})),
-      artifact_identity: fetch(attrs, :artifact_identity, crucible_decision.selected_model),
-      metadata:
-        Map.merge(fetch(attrs, :metadata, %{}), %{
-          crucible_decision_id: decision && decision.decision_id,
-          crucible_evidence_refs: (decision && decision.evidence_refs) || [],
-          crucible_uncertainty: decision && decision.uncertainty
-        })
-    )
+    DecisionAdapter.adapt(crucible_decision, attrs)
   end
 
   @spec from_route(map(), [map()] | String.t() | nil, keyword() | map()) ::
@@ -145,16 +108,6 @@ defmodule Trinity.Coordinator.RouteDecisionDerivation do
 
   defp confidence_band(_), do: :unknown
 
-  defp confidence_band_from_confidence(%{confidence: confidence}) when is_number(confidence) do
-    cond do
-      confidence >= 0.8 -> :high
-      confidence >= 0.5 -> :medium
-      true -> :low
-    end
-  end
-
-  defp confidence_band_from_confidence(_decision), do: :unknown
-
   defp top_margin(nil), do: nil
 
   defp top_margin(values) when is_list(values) do
@@ -175,9 +128,6 @@ defmodule Trinity.Coordinator.RouteDecisionDerivation do
     do: Map.get(map, field, Map.get(map, Atom.to_string(field), default))
 
   defp generated_ref(prefix), do: "#{prefix}:#{System.unique_integer([:positive])}"
-
-  defp decision_ref(%{decision_id: decision_id}) when is_binary(decision_id), do: decision_id
-  defp decision_ref(_decision), do: generated_ref("route-decision")
 
   defp hash_term(value) do
     binary =

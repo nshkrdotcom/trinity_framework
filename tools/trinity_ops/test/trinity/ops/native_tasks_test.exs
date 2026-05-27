@@ -39,6 +39,64 @@ defmodule Trinity.Ops.NativeTasksTest do
     assert trace_events(trace_path) |> Enum.member?("provider_called")
   end
 
+  test "crucible matrix eval writes strict diff report" do
+    out = tmp_path("crucible_matrix.json")
+
+    assert :ok =
+             Tasks.run(:trinity_crucible_matrix_eval, [
+               "--runtime-profile",
+               "mock_tiny",
+               "--max-cases",
+               "2",
+               "--out",
+               out
+             ])
+
+    report = Jason.decode!(File.read!(out))
+    assert report["accepted?"] == true
+    assert get_in(report, ["metrics", "role_concordance"]) == 1.0
+  end
+
+  test "trinity eval routes qwen eval through crucible wrapper" do
+    out = tmp_path("crucible_eval.json")
+
+    assert :ok =
+             Tasks.run(:trinity_eval, [
+               "qwen_router_prompt_eval",
+               "--via",
+               "crucible",
+               "--runtime-profile",
+               "mock_tiny",
+               "--max-cases",
+               "2",
+               "--out",
+               out
+             ])
+
+    assert %{"accepted?" => true} = Jason.decode!(File.read!(out))
+  end
+
+  test "crucible inspect writes a report and trace" do
+    out = tmp_path("crucible_inspect.json")
+    trace = tmp_path("crucible_inspect.jsonl")
+
+    assert :ok =
+             Tasks.run(:trinity_crucible_inspect, [
+               "--runtime-profile",
+               "mock_tiny",
+               "--message",
+               "Inspect this route",
+               "--out",
+               out,
+               "--trace-out",
+               trace
+             ])
+
+    report = Jason.decode!(File.read!(out))
+    assert get_in(report, ["crucible_trace", "trace_id"]) == "trinity-crucible-inspect"
+    assert trace_events(trace) |> Enum.member?("crucible_forward_trace")
+  end
+
   test "artifact fetch uses the framework registry pin fetcher" do
     content = ~s({"artifact":"ok"}\n)
     sha256 = :crypto.hash(:sha256, content) |> Base.encode16(case: :lower)

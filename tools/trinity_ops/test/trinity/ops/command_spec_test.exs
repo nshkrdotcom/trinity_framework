@@ -5,8 +5,11 @@ defmodule Trinity.Ops.CommandSpecTest do
 
   @expected_tasks ~w(
     trinity.artifact.fetch
+    trinity.crucible.inspect
+    trinity.crucible.matrix_eval
     trinity.demo
     trinity.env.check
+    trinity.eval
     trinity.gates
     trinity.hitl.adapted
     trinity.hitl.base_qwen
@@ -25,8 +28,11 @@ defmodule Trinity.Ops.CommandSpecTest do
 
   @sample_args %{
     trinity_artifact_fetch: ["--pin", "pin.json", "--dest", "artifact", "--offline"],
+    trinity_crucible_inspect: ["--runtime-profile", "mock_tiny", "--message", "hello"],
+    trinity_crucible_matrix_eval: ["--runtime-profile", "mock_tiny", "--max-cases", "2"],
     trinity_demo: [],
     trinity_env_check: ["-a", "artifact", "-r", "cuda"],
+    trinity_eval: ["qwen_router_prompt_eval", "--via", "crucible", "--max-cases", "2"],
     trinity_gates: [
       "--summary-out",
       "tmp/gates.json",
@@ -185,6 +191,19 @@ defmodule Trinity.Ops.CommandSpecTest do
              "--trace-content",
              "hash"
            ])[:trace_content] == "hash"
+
+    assert CommandSpec.parse!(:trinity_eval, [
+             "qwen_router_prompt_eval",
+             "--via",
+             "crucible"
+           ])[:_args] == ["qwen_router_prompt_eval"]
+
+    assert CommandSpec.parse!(:trinity_crucible_matrix_eval, [
+             "--runtime-profile",
+             "mock_tiny",
+             "--max-cases",
+             "3"
+           ])[:max_cases] == 3
 
     assert CommandSpec.parse!(:trinity_hitl_mock_loop, [
              "--artifact-dir",

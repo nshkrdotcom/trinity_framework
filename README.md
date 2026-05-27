@@ -42,6 +42,7 @@ The root project owns the operator-facing assembly:
 - `apps/trinity_single_node` is the standalone runtime app.
 - `tools/trinity_ops` owns every `mix trinity.*` operator command.
 - `examples/qwen_router_prompt_eval` owns the 37-case Qwen router prompt eval.
+- `examples/crucible_route` shows the reusable Crucible route adapter path.
 
 This repo is also the integration point for the nshkr stack. It must be able to
 run standalone and sit inside larger product, governance, execution, and testing
@@ -133,6 +134,9 @@ mix trinity.hitl.mock_loop \
   --runtime-profile mock_tiny \
   --max-turns 1 \
   --trace-out tmp/trinity_mock_loop.jsonl
+
+mix trinity.crucible.inspect --runtime-profile mock_tiny
+mix trinity.crucible.matrix_eval --runtime-profile mock_tiny
 ```
 
 CUDA/adapted bundle checks:
@@ -187,6 +191,19 @@ XLA_TARGET=cuda12 mix run lib/qwen_router_prompt_eval.exs -- \
 
 The eval asserts route decisions, margins, stable transcript fields, and
 determinism.
+
+The root eval wrapper can run the current route-logit path or the Crucible
+adapter path:
+
+```bash
+mix trinity.eval qwen_router_prompt_eval
+mix trinity.eval qwen_router_prompt_eval --via crucible
+```
+
+The Crucible path compares route decisions only: exact role matching, target
+overlap, confidence bands, decision stability, trajectory margins, safety
+regressions, format strictness, and warmed post-processing overhead. It does
+not compare generated text unless both paths use the same generator.
 
 ## Generate Safetensors
 

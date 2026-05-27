@@ -42,6 +42,7 @@ for one release window so old imports and `mix trinity.*` commands keep working.
   redaction bridge.
 - `tools/trinity_ops`: framework-owned implementation of old operator tasks.
 - `examples/qwen_router_prompt_eval`: 37-case prompt routing eval.
+- `examples/crucible_route`: minimal `via: :crucible` route example.
 - `../../North-Shore-AI/crucible_signal`: forward-pass signal ontology.
 - `../../North-Shore-AI/crucible_tap`: tap-plan contracts and capability
   negotiation.
@@ -60,11 +61,12 @@ side through public TRINITY contracts and generic projection references.
 
 ## Runtime Flow
 
-1. Build a `CrucibleTap.TapPlan` from the coordinator context.
-2. Run a Crucible-capable model runtime or direct `CrucibleBumblebee`
-   forward runner.
+1. Build a `CrucibleTap.TapPlan` from `Trinity.Crucible.RequestContext`.
+2. Run either the current route-logits runtime adapter or a native
+   Crucible-capable model runtime.
 3. Produce a bounded `CrucibleSignalTrace.ForwardTrace`.
 4. Produce a `CruciblePolicy.RouteDecision`.
-5. Adapt that decision into `Trinity.Coordinator.RouteDecision`.
+5. Adapt that decision into `Trinity.Coordinator.RouteDecision` through
+   `Trinity.Crucible.DecisionAdapter`.
 6. Dispatch through the provider or self-hosted runtime bridge.
 7. Emit trace and decision refs through the trace bridge.

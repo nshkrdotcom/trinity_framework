@@ -5,8 +5,11 @@ defmodule TrinityFrameworkRootTest do
 
   @expected_tasks ~w(
     trinity.artifact.fetch
+    trinity.crucible.inspect
+    trinity.crucible.matrix_eval
     trinity.demo
     trinity.env.check
+    trinity.eval
     trinity.gates
     trinity.hitl.adapted
     trinity.hitl.base_qwen
@@ -27,6 +30,7 @@ defmodule TrinityFrameworkRootTest do
     guides/onboarding.md
     guides/current_direction.md
     guides/system_architecture.md
+    guides/crucible_path.md
     guides/service_buildout.md
     guides/operations_qc.md
     guides/artifact_distribution.md
@@ -92,6 +96,7 @@ defmodule TrinityFrameworkRootTest do
       Trinity.Bridge.Trace,
       Trinity.Ops,
       Trinity.Examples.QwenRouterPromptEval,
+      Trinity.Examples.CrucibleRoute,
       Trinity.SakanaPipeline.Exporter,
       CommandSpec
     ]
@@ -124,6 +129,11 @@ defmodule TrinityFrameworkRootTest do
       Trinity.Coordinator.StateManager,
       Trinity.Coordinator.Verifier,
       Trinity.Coordinator.RouteDecisionDerivation,
+      Trinity.Crucible.RequestContext,
+      Trinity.Crucible.TapPlanBuilder,
+      Trinity.Crucible.TraceAdapter,
+      Trinity.Crucible.DecisionAdapter,
+      Trinity.Crucible.DiffReport,
       # Sakana contracts and pipeline.
       Trinity.Sakana.Manifest,
       Trinity.Sakana.RouterHeadSpec,
@@ -145,7 +155,8 @@ defmodule TrinityFrameworkRootTest do
       Trinity.Ops.Tasks,
       Trinity.Ops.Gates,
       Trinity.Ops.NativeTasks,
-      Trinity.Examples.QwenRouterPromptEval.SnapshotResolver
+      Trinity.Examples.QwenRouterPromptEval.SnapshotResolver,
+      Trinity.Examples.CrucibleRoute
     ]
 
     assert Enum.all?(modules, &Code.ensure_loaded?/1)
@@ -174,9 +185,14 @@ defmodule TrinityFrameworkRootTest do
     samples = [
       {:trinity_artifact_fetch,
        ["--pin", "priv/sakana_trinity/artifact_pin.json", "--dest", "tmp/bundle", "--offline"]},
+      {:trinity_crucible_inspect,
+       ["--runtime-profile", "mock_tiny", "--message", "inspect", "--trace-out", "tmp/c.jsonl"]},
+      {:trinity_crucible_matrix_eval,
+       ["--runtime-profile", "mock_tiny", "--max-cases", "2", "--out", "tmp/matrix.json"]},
       {:trinity_demo, route_demo_args()},
       {:trinity_env_check,
        ["--artifact-dir", "priv/sakana_trinity/adapted", "--require", "cuda"]},
+      {:trinity_eval, ["qwen_router_prompt_eval", "--via", "crucible", "--max-cases", "2"]},
       {:trinity_gates, ["--fast", "--summary-out", "tmp/gates.json"]},
       {:trinity_hitl_adapted,
        ["--artifact-dir", "priv/sakana_trinity/adapted", "--runtime-profile", "mock_tiny"]},

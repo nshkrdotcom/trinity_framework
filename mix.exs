@@ -80,7 +80,8 @@ defmodule TrinityFramework.MixProject do
         {:trinity_bridge_trace, path: "bridges/trinity_bridge_trace"},
         {:trinity_single_node, path: "apps/trinity_single_node"},
         {:trinity_ops, path: "tools/trinity_ops"},
-        {:qwen_router_prompt_eval, path: "examples/qwen_router_prompt_eval"}
+        {:qwen_router_prompt_eval, path: "examples/qwen_router_prompt_eval"},
+        {:trinity_crucible_route_example, path: "examples/crucible_route"}
       ]
   end
 
@@ -311,6 +312,7 @@ defmodule TrinityFramework.MixProject do
         "guides/onboarding.md",
         "guides/current_direction.md",
         "guides/system_architecture.md",
+        "guides/crucible_path.md",
         "guides/service_buildout.md",
         "guides/router_fabric.md",
         "guides/operations_qc.md",
@@ -343,6 +345,7 @@ defmodule TrinityFramework.MixProject do
         ],
         "System Architecture": [
           "guides/system_architecture.md",
+          "guides/crucible_path.md",
           "guides/runtime_profiles.md",
           "guides/service_buildout.md",
           "guides/router_fabric.md"

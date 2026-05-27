@@ -1,7 +1,8 @@
 # Runtime Profiles
 
 Runtime profiles select how the single-node app loads and runs the Qwen/Sakana
-route path.
+route path. The profile is a Trinity runtime choice; the Crucible libraries do
+not require Qwen or the modified Trinity 0.6B artifact.
 
 Common profiles:
 
@@ -17,6 +18,7 @@ Common profiles:
 mix trinity.route.demo --mock-provider --runtime-profile mock_tiny --max-turns 1
 mix trinity.hitl.mock_loop --runtime-profile mock_tiny --max-turns 1
 mix trinity.hitl.adapted --runtime-profile cuda_exla
+mix trinity.crucible.matrix_eval --runtime-profile mock_tiny
 ```
 
 Eval profile:
@@ -50,4 +52,3 @@ mix run lib/qwen_router_prompt_eval.exs -- \
 
 The EMLX profile is intentionally not validated on Linux CUDA hosts. Record it
 as an Apple Silicon hardware gate unless an Apple Silicon runner is available.
-

@@ -21,6 +21,19 @@ defmodule Trinity.Ops.CommandSpec do
         switches: [artifact_dir: :string, require: :string],
         aliases: [a: :artifact_dir, r: :require]
       },
+      trinity_eval: %{
+        task: "trinity.eval",
+        switches: eval_switches(),
+        positional: true
+      },
+      trinity_crucible_inspect: %{
+        task: "trinity.crucible.inspect",
+        switches: crucible_switches()
+      },
+      trinity_crucible_matrix_eval: %{
+        task: "trinity.crucible.matrix_eval",
+        switches: crucible_matrix_switches()
+      },
       trinity_gates: %{
         task: "trinity.gates",
         switches: [
@@ -189,6 +202,39 @@ defmodule Trinity.Ops.CommandSpec do
     ]
   end
 
+  defp crucible_switches do
+    [
+      artifact_dir: :string,
+      runtime_profile: :string,
+      message: :string,
+      out: :string,
+      trace_out: :string
+    ]
+  end
+
+  defp crucible_matrix_switches do
+    [
+      artifact_dir: :string,
+      runtime_profile: :string,
+      case: :keep,
+      out: :string,
+      no_assert: :boolean,
+      max_cases: :integer
+    ]
+  end
+
+  defp eval_switches do
+    [
+      artifact_dir: :string,
+      runtime_profile: :string,
+      via: :string,
+      case: :keep,
+      out: :string,
+      no_assert: :boolean,
+      max_cases: :integer
+    ]
+  end
+
   @spec parse!(task_key(), [String.t()]) :: keyword()
   def parse!(task_key, argv) do
     spec = Map.fetch!(all(), task_key)
@@ -199,9 +245,12 @@ defmodule Trinity.Ops.CommandSpec do
         aliases: Map.get(spec, :aliases, [])
       )
 
-    unless rest == [], do: raise(ArgumentError, "unexpected arguments: #{inspect(rest)}")
+    unless rest == [] or Map.get(spec, :positional, false) do
+      raise(ArgumentError, "unexpected arguments: #{inspect(rest)}")
+    end
+
     unless invalid == [], do: raise(ArgumentError, "invalid options: #{inspect(invalid)}")
 
-    opts
+    if Map.get(spec, :positional, false), do: Keyword.put(opts, :_args, rest), else: opts
   end
 end

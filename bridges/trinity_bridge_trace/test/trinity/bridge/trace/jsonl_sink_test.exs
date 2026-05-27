@@ -92,6 +92,31 @@ defmodule Trinity.Bridge.Trace.JsonlSinkTest do
            }
   end
 
+  test "serializes Crucible forward trace records", %{tmp_dir: tmp_dir} do
+    path = tmp_path(tmp_dir, "crucible")
+    trace = crucible_trace()
+
+    assert :ok =
+             JsonlSink.emit_crucible_trace(trace,
+               path: path,
+               coordination_run_ref: "run-crucible"
+             )
+
+    records =
+      path
+      |> File.read!()
+      |> String.split("\n", trim: true)
+      |> Enum.map(&Jason.decode!/1)
+
+    assert Enum.map(records, & &1["event"]) == [
+             "crucible_forward_trace",
+             "crucible_signal_record"
+           ]
+
+    assert hd(records)["trace_id"] == "trace:crucible"
+    assert List.last(records)["signal_type"] == "final_logits"
+  end
+
   defp route_event do
     %TraceEvent{
       event_ref: "event:route",
@@ -107,6 +132,31 @@ defmodule Trinity.Bridge.Trace.JsonlSinkTest do
         route_decision: %{agent_id: 4, role_id: 2, role_name: "Verifier"}
       }
     }
+  end
+
+  defp crucible_trace do
+    ref =
+      CrucibleSignal.SignalRef.for_final_logits(
+        trace_id: "trace:crucible",
+        signal_id: "signal:final",
+        model_ref: "model:fixture",
+        shape: [3]
+      )
+
+    record =
+      CrucibleSignalTrace.SignalRecord.new!(
+        signal_ref: ref,
+        summary: CrucibleSignal.TensorSummary.from_list([0.1, 0.2, 0.3], entropy: true)
+      )
+
+    CrucibleSignalTrace.ForwardTrace.new!(
+      trace_id: "trace:crucible",
+      model_ref: "model:fixture",
+      input_hash: "input:hash",
+      signal_records: [record],
+      final_logits: ref,
+      metadata: %{task_type: :verification}
+    )
   end
 
   defp decode_one!(path) do

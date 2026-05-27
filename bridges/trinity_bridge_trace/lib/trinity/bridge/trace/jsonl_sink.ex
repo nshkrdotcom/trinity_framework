@@ -6,6 +6,7 @@ defmodule Trinity.Bridge.Trace.JsonlSink do
   @behaviour Trinity.Coordinator.TraceSink
 
   alias AITrace.{Event, Span}
+  alias CrucibleSignalTrace.ForwardTrace
   alias Trinity.Bridge.Trace.{JSONL, Redactor}
   alias Trinity.Coordinator.TraceEvent
 
@@ -38,6 +39,18 @@ defmodule Trinity.Bridge.Trace.JsonlSink do
   end
 
   def emit(_event, _opts), do: {:error, :invalid_trace_event}
+
+  @doc "Writes a Crucible forward trace as Trinity-compatible JSONL records."
+  @spec emit_crucible_trace(ForwardTrace.t(), keyword()) :: :ok | {:error, term()}
+  def emit_crucible_trace(trace, opts \\ [])
+
+  def emit_crucible_trace(%ForwardTrace{} = trace, opts) when is_list(opts) do
+    with {:ok, sink} <- sink_from_opts(opts) do
+      write_crucible_trace(sink, trace, opts)
+    end
+  end
+
+  def emit_crucible_trace(_trace, _opts), do: {:error, :invalid_crucible_trace}
 
   @doc "Builds a JSONL sink from options."
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
@@ -78,6 +91,19 @@ defmodule Trinity.Bridge.Trace.JsonlSink do
     JSONL.append(sink.path, record(sink, event))
   end
 
+  @doc "Writes one Crucible forward trace and its signal records to a sink."
+  @spec write_crucible_trace(t(), ForwardTrace.t(), keyword()) :: :ok | {:error, term()}
+  def write_crucible_trace(%__MODULE__{} = sink, %ForwardTrace{} = trace, opts \\ []) do
+    trace
+    |> crucible_records(sink, opts)
+    |> Enum.reduce_while(:ok, fn record, :ok ->
+      case JSONL.append(sink.path, record) do
+        :ok -> {:cont, :ok}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+  end
+
   defp sink_from_opts(opts) do
     case Keyword.get(opts, :sink) do
       %__MODULE__{} = sink -> {:ok, sink}
@@ -105,6 +131,44 @@ defmodule Trinity.Bridge.Trace.JsonlSink do
     |> maybe_put_ai_trace(sink, span, ai_event)
   end
 
+  defp crucible_records(%ForwardTrace{} = trace, %__MODULE__{} = sink, opts) do
+    timestamp_ms = Keyword.get(opts, :timestamp_ms, System.system_time(:millisecond))
+    run_id = Keyword.get(opts, :coordination_run_ref) || trace.trace_id
+
+    [
+      %{
+        schema_version: sink.schema_version,
+        event: :crucible_forward_trace,
+        run_id: run_id,
+        timestamp_ms: timestamp_ms,
+        trace_id: trace.trace_id,
+        model_ref: trace.model_ref,
+        input_hash: trace.input_hash,
+        tap_plan_ref: trace.tap_plan_ref,
+        signal_count: length(trace.signal_records),
+        final_logits_ref: trace.final_logits && trace.final_logits.signal_id,
+        metadata: redact_payload(sink, trace.metadata)
+      }
+    ] ++
+      Enum.map(trace.signal_records, fn record ->
+        %{
+          schema_version: sink.schema_version,
+          event: :crucible_signal_record,
+          run_id: run_id,
+          timestamp_ms: timestamp_ms,
+          trace_id: trace.trace_id,
+          signal_id: record.signal_ref.signal_id,
+          signal_type: record.signal_ref.signal_type,
+          layer_index: record.signal_ref.layer_index,
+          token_index: record.signal_ref.token_index,
+          capture_mode: record.capture_mode,
+          summary: redact_payload(sink, normalize_structs(record.summary)),
+          value_ref: record.value_ref,
+          metadata: redact_payload(sink, record.metadata)
+        }
+      end)
+  end
+
   defp attributes(%__MODULE__{} = sink, %TraceEvent{} = event) do
     %{
       payload: redact_payload(sink, event.payload),
@@ -113,14 +177,30 @@ defmodule Trinity.Bridge.Trace.JsonlSink do
   end
 
   defp redact_payload(%__MODULE__{content: :full, redaction_values: values}, payload) do
+    payload = normalize_structs(payload)
     Redactor.redact_values(payload, values)
   end
 
   defp redact_payload(%__MODULE__{redaction_values: values}, payload) do
+    payload = normalize_structs(payload)
+
     payload
     |> Redactor.redact(:redacted)
     |> Redactor.redact_values(values)
   end
+
+  defp normalize_structs(%_{} = struct) do
+    struct
+    |> Map.from_struct()
+    |> normalize_structs()
+  end
+
+  defp normalize_structs(value) when is_map(value) do
+    Map.new(value, fn {key, nested} -> {key, normalize_structs(nested)} end)
+  end
+
+  defp normalize_structs(value) when is_list(value), do: Enum.map(value, &normalize_structs/1)
+  defp normalize_structs(value), do: value
 
   defp event_name(event_type), do: "trinity." <> normalize_event_type(event_type)
   defp span_name(event_type), do: "trinity.trace." <> normalize_event_type(event_type)

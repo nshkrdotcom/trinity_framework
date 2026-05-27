@@ -1,16 +1,11 @@
-unless Code.ensure_loaded?(DependencySources) do
-  Code.require_file("../../build_support/dependency_sources.exs", __DIR__)
-end
-
-defmodule Trinity.CoordinatorCore.MixProject do
+defmodule Trinity.Examples.CrucibleRoute.MixProject do
   use Mix.Project
 
-  @repo_root Path.expand("../..", __DIR__)
   @source_url "https://github.com/nshkrdotcom/trinity_framework"
 
   def project do
     [
-      app: :trinity_coordinator_core,
+      app: :trinity_crucible_route_example,
       version: "0.1.0",
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
@@ -22,9 +17,7 @@ defmodule Trinity.CoordinatorCore.MixProject do
   end
 
   def application do
-    [
-      extra_applications: [:crypto, :logger, :outer_brain_context_abi]
-    ]
+    [extra_applications: [:logger]]
   end
 
   def cli do
@@ -40,14 +33,8 @@ defmodule Trinity.CoordinatorCore.MixProject do
 
   defp deps do
     [
-      {:trinity_contracts, path: "../trinity_contracts"},
-      {:trinity_sakana_contracts, path: "../trinity_sakana_contracts"},
-      DependencySources.dep(:crucible_signal, @repo_root),
-      DependencySources.dep(:crucible_tap, @repo_root),
-      DependencySources.dep(:crucible_policy, @repo_root),
-      DependencySources.dep(:crucible_signal_trace, @repo_root),
-      DependencySources.dep(:mezzanine_ai_execution_engine, @repo_root),
-      DependencySources.dep(:outer_brain_context_abi, @repo_root)
+      {:trinity_single_node, path: "../../apps/trinity_single_node"},
+      {:jason, "~> 1.4"}
     ] ++ quality_deps()
   end
 

@@ -6,6 +6,7 @@ defmodule TrinityFrameworkDocsTest do
     guides/onboarding.md
     guides/current_direction.md
     guides/system_architecture.md
+    guides/crucible_path.md
     guides/service_buildout.md
     guides/operations_qc.md
     guides/artifact_distribution.md
@@ -33,8 +34,11 @@ defmodule TrinityFrameworkDocsTest do
 
   @expected_tasks ~w(
     trinity.artifact.fetch
+    trinity.crucible.inspect
+    trinity.crucible.matrix_eval
     trinity.demo
     trinity.env.check
+    trinity.eval
     trinity.gates
     trinity.hitl.adapted
     trinity.hitl.base_qwen
@@ -57,6 +61,11 @@ defmodule TrinityFrameworkDocsTest do
     {"python import", ["mix trinity.sakana.import_python", "Python semantic"]},
     {"huggingface upload", ["HfHub.Repo.create", "HfHub.Commit.upload_folder"]},
     {"qwen eval", ["qwen_router_prompt_eval", "37-case"]},
+    {"crucible path",
+     [
+       "mix trinity.crucible.matrix_eval",
+       "mix trinity.eval qwen_router_prompt_eval --via crucible"
+     ]},
     {"runtime profiles", ["mock_tiny", "cuda_exla"]},
     {"parity", ["mix trinity.parity.check", "mix trinity.sakana.parity_sample"]},
     {"troubleshooting", ["Troubleshooting", "Root `mix test` Says There Are No Tests"]},

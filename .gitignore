@@ -1,6 +1,7 @@
 /_build/
 /deps/
 /doc/
+/examples/*/doc/
 /dist/
 /tmp/
 /.dependency_sources.local.exs
