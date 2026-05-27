@@ -42,6 +42,8 @@ defmodule Trinity.CoordinatorCore.MixProject do
     [
       {:trinity_contracts, path: "../trinity_contracts"},
       {:trinity_sakana_contracts, path: "../trinity_sakana_contracts"},
+      DependencySources.dep(:crucible_policy, @repo_root),
+      DependencySources.dep(:crucible_signal_trace, @repo_root),
       DependencySources.dep(:mezzanine_ai_execution_engine, @repo_root),
       DependencySources.dep(:outer_brain_context_abi, @repo_root)
     ] ++ quality_deps()

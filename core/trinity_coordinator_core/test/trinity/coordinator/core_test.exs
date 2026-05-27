@@ -16,6 +16,27 @@ defmodule Trinity.CoordinatorCoreTest do
 
   alias Trinity.Coordinator.Orchestrator
 
+  defmodule CrucibleRuntime do
+    @behaviour Trinity.Coordinator.ModelRuntime
+
+    @impl true
+    def load(plan, _opts), do: {:ok, %{plan: plan}}
+
+    @impl true
+    def route(_state, _plan, _opts) do
+      {:ok,
+       CruciblePolicy.RouteDecision.new!(
+         trace_id: "trace-crucible",
+         decision_id: "crucible-decision-1",
+         selected_target: :worker,
+         selected_model: :fixture_model,
+         confidence: 0.82,
+         uncertainty: %CruciblePolicy.Uncertainty{entropy: 0.2},
+         evidence_refs: ["final_logits"]
+       )}
+    end
+  end
+
   defmodule Runtime do
     @behaviour Trinity.Coordinator.ModelRuntime
 
@@ -168,6 +189,33 @@ defmodule Trinity.CoordinatorCoreTest do
     assert trace.role_name == "Verifier"
   end
 
+  test "route decision derivation consumes Crucible policy decisions" do
+    crucible_decision =
+      CruciblePolicy.RouteDecision.new!(
+        trace_id: "trace-crucible",
+        decision_id: "crucible-decision-2",
+        selected_target: :verifier,
+        selected_model: :fixture_model,
+        confidence: 0.58,
+        uncertainty: %CruciblePolicy.Uncertainty{entropy: 3.0},
+        evidence_refs: ["final_logits"]
+      )
+
+    assert {:ok, decision} =
+             RouteDecisionDerivation.from_crucible(
+               crucible_decision,
+               [%{role: "user", content: "check"}],
+               selected_agent_id: 3
+             )
+
+    assert decision.selected_agent_id == 3
+    assert decision.selected_role_id == 2
+    assert decision.role_name == "Verifier"
+    assert decision.trace_ref == "trace-crucible"
+    assert decision.backend_label == :crucible_policy
+    assert decision.metadata.crucible_evidence_refs == ["final_logits"]
+  end
+
   test "governed authority materializes provider options and rejects direct bypasses" do
     authority = [
       authority_ref: "auth",
@@ -230,6 +278,20 @@ defmodule Trinity.CoordinatorCoreTest do
 
     assert result.response == "ACCEPT: correct"
     assert Enum.map(result.messages, & &1.role) == ["user", "assistant", "assistant"]
+  end
+
+  test "orchestrator consumes Crucible policy route decisions" do
+    assert {:ok, result} =
+             Orchestrator.run_loop([%{role: "user", content: "solve"}],
+               model_runtime: CrucibleRuntime,
+               model_state: :loaded,
+               extraction_plan:
+                 CrucibleTap.TapPlan.new!([[id: "logits", signal_type: :final_logits]]),
+               agent_caller: Caller,
+               max_turns: 1
+             )
+
+    assert result.response == "Worker answer: 42"
   end
 
   test "orchestrator applies thinker role suggestions through behaviour state" do

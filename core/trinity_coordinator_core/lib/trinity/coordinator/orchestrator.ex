@@ -3,6 +3,8 @@ defmodule Trinity.Coordinator.Orchestrator do
   Behavior-injected TRINITY coordinator loop.
   """
 
+  alias CruciblePolicy.RouteDecision, as: CrucibleRouteDecision
+
   alias Trinity.Coordinator.{
     AgentCallIntent,
     AgentCallReceipt,
@@ -10,6 +12,7 @@ defmodule Trinity.Coordinator.Orchestrator do
     HiddenStateExtractionPlan,
     RoleInjector,
     RouteDecisionDerivation,
+    RouteLogits,
     RunGovernance,
     StateManager,
     Thinker,
@@ -52,9 +55,8 @@ defmodule Trinity.Coordinator.Orchestrator do
     with :ok <-
            normalize_budget(Budgets.check(run_ctx.budget_context, :turn_start, %{turn: turn})),
          messages <- StateManager.get_messages(pid),
-         {:ok, route_logits} <- route(messages, run_ctx, turn),
-         {:ok, decision} <-
-           RouteDecisionDerivation.from_logits(route_logits, messages, run_ctx.decision_attrs),
+         {:ok, route_result} <- route(messages, run_ctx, turn),
+         {:ok, decision} <- derive_route_decision(route_result, messages, run_ctx.decision_attrs),
          route <- apply_role_override(decision, loop_state),
          :ok <- ensure_role_dispatch_allowed(route.role_atom, loop_state),
          :ok <-
@@ -80,6 +82,14 @@ defmodule Trinity.Coordinator.Orchestrator do
   defp route(messages, run_ctx, turn) do
     opts = [messages: messages, turn: turn]
     run_ctx.model_runtime.route(run_ctx.model_state, run_ctx.extraction_plan, opts)
+  end
+
+  defp derive_route_decision(%RouteLogits{} = route_logits, messages, attrs) do
+    RouteDecisionDerivation.from_logits(route_logits, messages, attrs)
+  end
+
+  defp derive_route_decision(%CrucibleRouteDecision{} = route_decision, messages, attrs) do
+    RouteDecisionDerivation.from_crucible(route_decision, messages, attrs)
   end
 
   defp dispatch(messages, route, run_ctx, turn) do

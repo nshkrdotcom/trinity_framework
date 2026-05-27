@@ -17,6 +17,11 @@ The root project owns assembly:
 contracts, self-hosted inference bridge, provider bridge, trace bridge, Sakana
 artifact loading, and execution-plane process runtime into a single-node app.
 
+The next-generation forward-pass substrate is Crucible-owned. Trinity consumes
+`crucible_tap` plans, `crucible_signal_trace` refs, and
+`crucible_policy` decisions; reusable signal capture and Bumblebee/Nx/Axon
+adapter logic stays in the new `crucible_*` packages.
+
 `trinity_coordinator` owns no new runtime implementation. It remains a v2 shim
 for one release window so old imports and `mix trinity.*` commands keep working.
 
@@ -37,6 +42,14 @@ for one release window so old imports and `mix trinity.*` commands keep working.
   redaction bridge.
 - `tools/trinity_ops`: framework-owned implementation of old operator tasks.
 - `examples/qwen_router_prompt_eval`: 37-case prompt routing eval.
+- `../../North-Shore-AI/crucible_signal`: forward-pass signal ontology.
+- `../../North-Shore-AI/crucible_tap`: tap-plan contracts and capability
+  negotiation.
+- `../../North-Shore-AI/crucible_signal_trace`: bounded forward-trace records.
+- `../../North-Shore-AI/crucible_bumblebee`: Bumblebee/Nx/Axon adapter and
+  first working forward-runner slice.
+- `../../North-Shore-AI/crucible_policy`: routing, gating, uncertainty, and
+  steering decisions over signal traces.
 
 ## Dependency Direction
 
@@ -47,10 +60,11 @@ side through public TRINITY contracts and generic projection references.
 
 ## Runtime Flow
 
-1. Fetch or generate a Sakana-adapted Qwen artifact bundle.
-2. Load a runtime profile in `Trinity.SingleNode`.
-3. Extract hidden state from Qwen layer 26.
-4. Apply the Sakana head to select agent and role.
-5. Build a `Trinity.Coordinator.RouteDecision`.
+1. Build a `CrucibleTap.TapPlan` from the coordinator context.
+2. Run a Crucible-capable model runtime or direct `CrucibleBumblebee`
+   forward runner.
+3. Produce a bounded `CrucibleSignalTrace.ForwardTrace`.
+4. Produce a `CruciblePolicy.RouteDecision`.
+5. Adapt that decision into `Trinity.Coordinator.RouteDecision`.
 6. Dispatch through the provider or self-hosted runtime bridge.
-7. Emit trace events through the trace bridge.
+7. Emit trace and decision refs through the trace bridge.

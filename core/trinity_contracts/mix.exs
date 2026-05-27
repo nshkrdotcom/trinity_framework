@@ -1,6 +1,11 @@
+unless Code.ensure_loaded?(DependencySources) do
+  Code.require_file("../../build_support/dependency_sources.exs", __DIR__)
+end
+
 defmodule Trinity.Contracts.MixProject do
   use Mix.Project
 
+  @repo_root Path.expand("../..", __DIR__)
   @source_url "https://github.com/nshkrdotcom/trinity_framework"
 
   def project do
@@ -34,7 +39,10 @@ defmodule Trinity.Contracts.MixProject do
   end
 
   defp deps do
-    quality_deps()
+    [
+      DependencySources.dep(:crucible_tap, @repo_root),
+      DependencySources.dep(:crucible_policy, @repo_root)
+    ] ++ quality_deps()
   end
 
   defp quality_deps do

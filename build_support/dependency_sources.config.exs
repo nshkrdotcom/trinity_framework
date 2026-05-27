@@ -28,6 +28,41 @@
       default_order: [:path, :github, :hex],
       publish_order: [:hex]
     },
+    crucible_signal: %{
+      path: "../../North-Shore-AI/crucible_signal",
+      github: %{repo: "North-Shore-AI/crucible_signal", branch: "main"},
+      hex: "~> 0.1.0",
+      default_order: [:path, :github, :hex],
+      publish_order: [:hex]
+    },
+    crucible_tap: %{
+      path: "../../North-Shore-AI/crucible_tap",
+      github: %{repo: "North-Shore-AI/crucible_tap", branch: "main"},
+      hex: "~> 0.1.0",
+      default_order: [:path, :github, :hex],
+      publish_order: [:hex]
+    },
+    crucible_signal_trace: %{
+      path: "../../North-Shore-AI/crucible_signal_trace",
+      github: %{repo: "North-Shore-AI/crucible_signal_trace", branch: "main"},
+      hex: "~> 0.1.0",
+      default_order: [:path, :github, :hex],
+      publish_order: [:hex]
+    },
+    crucible_bumblebee: %{
+      path: "../../North-Shore-AI/crucible_bumblebee",
+      github: %{repo: "North-Shore-AI/crucible_bumblebee", branch: "main"},
+      hex: "~> 0.1.0",
+      default_order: [:path, :github, :hex],
+      publish_order: [:hex]
+    },
+    crucible_policy: %{
+      path: "../../North-Shore-AI/crucible_policy",
+      github: %{repo: "North-Shore-AI/crucible_policy", branch: "main"},
+      hex: "~> 0.1.0",
+      default_order: [:path, :github, :hex],
+      publish_order: [:hex]
+    },
     self_hosted_inference_core: %{
       path: "../self_hosted_inference_core",
       github: %{repo: "nshkrdotcom/self_hosted_inference_core", branch: "main"},
