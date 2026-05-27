@@ -34,6 +34,11 @@ defmodule Trinity.Ops.CommandSpec do
         task: "trinity.crucible.matrix_eval",
         switches: crucible_matrix_switches()
       },
+      trinity_crucible_transcript: %{
+        task: "trinity.crucible.transcript",
+        switches: crucible_transcript_switches(),
+        positional: true
+      },
       trinity_gates: %{
         task: "trinity.gates",
         switches: [
@@ -226,6 +231,16 @@ defmodule Trinity.Ops.CommandSpec do
       limit: :integer,
       no_assert: :boolean,
       max_cases: :integer
+    ]
+  end
+
+  defp crucible_transcript_switches do
+    [
+      artifact_root: :string,
+      cwd: :string,
+      env: :keep,
+      name: :string,
+      phase: :string
     ]
   end
 

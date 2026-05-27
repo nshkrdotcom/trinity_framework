@@ -7,6 +7,7 @@ defmodule Trinity.Ops.CommandSpecTest do
     trinity.artifact.fetch
     trinity.crucible.inspect
     trinity.crucible.matrix_eval
+    trinity.crucible.transcript
     trinity.demo
     trinity.env.check
     trinity.eval
@@ -30,6 +31,20 @@ defmodule Trinity.Ops.CommandSpecTest do
     trinity_artifact_fetch: ["--pin", "pin.json", "--dest", "artifact", "--offline"],
     trinity_crucible_inspect: ["--runtime-profile", "mock_tiny", "--message", "hello"],
     trinity_crucible_matrix_eval: ["--runtime-profile", "mock_tiny", "--max-cases", "2"],
+    trinity_crucible_transcript: [
+      "--name",
+      "sample",
+      "--cwd",
+      ".",
+      "--artifact-root",
+      "tmp/crucible_v5",
+      "--phase",
+      "2",
+      "--",
+      "elixir",
+      "-e",
+      "IO.puts(:ok)"
+    ],
     trinity_demo: [],
     trinity_env_check: ["-a", "artifact", "-r", "cuda"],
     trinity_eval: ["qwen_router_prompt_eval", "--via", "crucible", "--max-cases", "2"],
@@ -125,7 +140,7 @@ defmodule Trinity.Ops.CommandSpecTest do
     ]
   }
 
-  test "preserves all 17 operator-visible task names" do
+  test "preserves operator-visible task names" do
     assert CommandSpec.all()
            |> Map.values()
            |> Enum.map(& &1.task)

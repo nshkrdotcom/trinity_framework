@@ -7,6 +7,7 @@ defmodule TrinityFrameworkRootTest do
     trinity.artifact.fetch
     trinity.crucible.inspect
     trinity.crucible.matrix_eval
+    trinity.crucible.transcript
     trinity.demo
     trinity.env.check
     trinity.eval

@@ -177,6 +177,31 @@ defmodule Trinity.Ops.NativeTasksTest do
     assert File.read!(Path.join(dest, "manifest.json")) == content
   end
 
+  test "crucible transcript captures output and artifact index row" do
+    root = tmp_path("crucible_v5")
+    executable = System.find_executable("elixir") || "elixir"
+
+    assert :ok =
+             Tasks.run(:trinity_crucible_transcript, [
+               "--name",
+               "transcript smoke",
+               "--artifact-root",
+               root,
+               "--phase",
+               "2",
+               "--",
+               executable,
+               "-e",
+               "IO.puts(\"transcript ok\")"
+             ])
+
+    transcript_path = Path.join([root, "transcripts", "transcript_smoke.log"])
+    index_path = Path.join(root, "ARTIFACT_INDEX.md")
+
+    assert File.read!(transcript_path) =~ "transcript ok"
+    assert File.read!(index_path) =~ "| 2 | #{executable} -e IO.puts"
+  end
+
   test "parity check performs strict stage checks without the Python wrapper" do
     python_path = tmp_path("python_report.json")
     elixir_path = tmp_path("elixir_report.json")

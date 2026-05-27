@@ -50,6 +50,7 @@ defmodule Trinity.Ops.NativeTasks do
   def run(:trinity_artifact_fetch, opts), do: artifact_fetch(opts)
   def run(:trinity_crucible_inspect, opts), do: crucible_inspect(opts)
   def run(:trinity_crucible_matrix_eval, opts), do: crucible_matrix_eval(opts)
+  def run(:trinity_crucible_transcript, opts), do: crucible_transcript(opts)
   def run(:trinity_demo, opts), do: route_demo(opts)
   def run(:trinity_eval, opts), do: eval(opts)
   def run(:trinity_hitl_adapted, opts), do: hitl_adapted(opts)
@@ -95,6 +96,45 @@ defmodule Trinity.Ops.NativeTasks do
     pass("TRINITY ARTIFACT FETCH")
   end
 
+  defp crucible_transcript(opts) do
+    command = Keyword.get(opts, :_args, [])
+
+    if command == [] do
+      Mix.raise("usage: mix trinity.crucible.transcript [opts] -- command arg...")
+    end
+
+    run_transcript_command(opts, command)
+  end
+
+  defp run_transcript_command(opts, command) do
+    artifact_root = Keyword.get(opts, :artifact_root, "tmp/crucible_v5")
+    name = Keyword.get(opts, :name, Enum.join(command, "_"))
+    cwd = Keyword.get(opts, :cwd, File.cwd!())
+    env = parse_env_assignments(Keyword.get_values(opts, :env))
+    transcript_path = Path.join([artifact_root, "transcripts", "#{safe_artifact_name(name)}.log"])
+    index_path = Path.join(artifact_root, "ARTIFACT_INDEX.md")
+
+    File.mkdir_p!(Path.dirname(transcript_path))
+    File.mkdir_p!(Path.dirname(index_path))
+
+    {executable, args} = command_head!(command)
+    started_at = DateTime.utc_now()
+    header = transcript_header(command, cwd, env, started_at)
+
+    {output, exit_code} =
+      run_system_command!(executable, args, cwd, env, transcript_path, header)
+
+    File.write!(transcript_path, header <> output <> transcript_footer(exit_code))
+    append_transcript_index!(index_path, opts, command, cwd, env, exit_code, transcript_path)
+
+    if exit_code == 0 do
+      Mix.shell().info("transcript: #{transcript_path}")
+      :ok
+    else
+      Mix.raise("transcript command failed with exit #{exit_code}: #{Enum.join(command, " ")}")
+    end
+  end
+
   defp hf_hub_artifact_download(args) do
     repo_id = Keyword.fetch!(args, :repo_id)
     filename = Keyword.fetch!(args, :filename)
@@ -114,6 +154,105 @@ defmodule Trinity.Ops.NativeTasks do
         verify_checksum: Keyword.get(args, :verify_checksum, false),
         expected_sha256: Keyword.get(args, :expected_sha256)
       )
+    end
+  end
+
+  defp command_head!([executable | args]), do: {executable, args}
+
+  defp run_system_command!(executable, args, cwd, env, transcript_path, header) do
+    System.cmd(executable, args, cd: cwd, stderr_to_stdout: true, env: env)
+  rescue
+    error ->
+      File.write!(transcript_path, header <> Exception.format(:error, error, __STACKTRACE__))
+      reraise error, __STACKTRACE__
+  end
+
+  defp parse_env_assignments(assignments) do
+    Enum.map(assignments, fn assignment ->
+      case String.split(assignment, "=", parts: 2) do
+        [key, value] -> {key, value}
+        [key] -> {key, ""}
+      end
+    end)
+  end
+
+  defp transcript_header(command, cwd, env, started_at) do
+    """
+    # Crucible V5 Transcript
+    command: #{Enum.join(command, " ")}
+    cwd: #{cwd}
+    env: #{format_env(env)}
+    started_at: #{DateTime.to_iso8601(started_at)}
+
+    """
+  end
+
+  defp transcript_footer(exit_code), do: "\nexit_code: #{exit_code}\n"
+
+  defp append_transcript_index!(path, opts, command, cwd, env, exit_code, transcript_path) do
+    ensure_transcript_index!(path)
+
+    File.write!(
+      path,
+      transcript_index_row(%{
+        phase: Keyword.get(opts, :phase, ""),
+        command: Enum.join(command, " "),
+        cwd: cwd,
+        env: format_env(env),
+        exit_code: exit_code,
+        transcript: transcript_path,
+        artifacts: "",
+        git_commit: ""
+      }),
+      [:append]
+    )
+  end
+
+  defp ensure_transcript_index!(path) do
+    unless File.exists?(path) do
+      File.write!(
+        path,
+        """
+        # Crucible V5 Artifact Index
+
+        | Phase | Command | CWD | Env | Exit | Transcript | Artifacts | Git commit |
+        | --- | --- | --- | --- | --- | --- | --- | --- |
+        """
+      )
+    end
+  end
+
+  defp transcript_index_row(entry) do
+    [
+      entry.phase,
+      entry.command,
+      entry.cwd,
+      entry.env,
+      entry.exit_code,
+      entry.transcript,
+      entry.artifacts,
+      entry.git_commit
+    ]
+    |> Enum.map(&markdown_cell/1)
+    |> then(&("| " <> Enum.join(&1, " | ") <> " |\n"))
+  end
+
+  defp format_env([]), do: ""
+
+  defp format_env(env) do
+    Enum.map_join(env, " ", fn {key, value} -> "#{key}=#{value}" end)
+  end
+
+  defp markdown_cell(value), do: value |> to_string() |> String.replace("|", "\\|")
+
+  defp safe_artifact_name(name) do
+    name
+    |> String.trim()
+    |> String.replace(~r/[^A-Za-z0-9_.-]+/, "_")
+    |> String.trim("_")
+    |> case do
+      "" -> "command"
+      safe -> safe
     end
   end
 
