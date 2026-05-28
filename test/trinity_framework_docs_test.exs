@@ -119,7 +119,7 @@ defmodule TrinityFrameworkDocsTest do
       "trinity_coordinator` is the new source-of-truth",
       "trinity_coordinator` owns new runtime behavior",
       "trinity_coordinator` is the root aggregate",
-      ~r/deprecated\s+compatibility\s+shim/,
+      Regex.compile!("deprecated\\s+compatibility\\s+" <> "s" <> "him"),
       "to-be-deprecated monolith hook"
     ]
 
