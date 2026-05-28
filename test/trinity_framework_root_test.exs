@@ -135,7 +135,6 @@ defmodule TrinityFrameworkRootTest do
       Trinity.Crucible.TapPlanBuilder,
       Trinity.Crucible.TraceAdapter,
       Trinity.Crucible.DecisionAdapter,
-      Trinity.Crucible.DiffReport,
       # Sakana contracts and pipeline.
       Trinity.Sakana.Manifest,
       Trinity.Sakana.RouterHeadSpec,
@@ -183,7 +182,7 @@ defmodule TrinityFrameworkRootTest do
     assert Enum.all?(files, &sha256?(&1["sha256"]))
   end
 
-  test "operator command parser accepts representative old command flags at root" do
+  test "operator command parser accepts representative command flags at root" do
     samples = [
       {:trinity_artifact_fetch,
        ["--pin", "priv/sakana_trinity/artifact_pin.json", "--dest", "tmp/bundle", "--offline"]},
@@ -194,7 +193,7 @@ defmodule TrinityFrameworkRootTest do
       {:trinity_demo, route_demo_args()},
       {:trinity_env_check,
        ["--artifact-dir", "priv/sakana_trinity/adapted", "--require", "cuda"]},
-      {:trinity_eval, ["qwen_router_prompt_eval", "--via", "crucible", "--max-cases", "2"]},
+      {:trinity_eval, ["qwen_router_prompt_eval", "--max-cases", "2"]},
       {:trinity_gates, ["--fast", "--summary-out", "tmp/gates.json"]},
       {:trinity_hitl_adapted,
        ["--artifact-dir", "priv/sakana_trinity/adapted", "--runtime-profile", "mock_tiny"]},

@@ -3,15 +3,13 @@ defmodule Trinity.Crucible.TraceAdapter do
   Converts Trinity route-runtime evidence into bounded Crucible trace records.
   """
 
+  alias Crucible.{ForwardTrace, SignalRecord, TensorSummary}
   alias CruciblePolicy.RouteDecision, as: CrucibleRouteDecision
-  alias CrucibleSignal.{SignalRef, TensorSummary}
-  alias CrucibleSignalTrace.{ForwardTrace, JSONL, LayerTrajectory, SignalRecord}
+  alias CrucibleSignalTrace.{JSONL, LayerTrajectory}
   alias CrucibleTap.TapPlan
 
   alias Trinity.Coordinator.{RoleInjector, RouteLogits, TraceEvent}
   alias Trinity.Crucible.RequestContext
-
-  @aitrace_export Module.concat([CrucibleSignalTrace.Export, :AITrace, :V1])
 
   @spec from_logits(RouteLogits.t(), [map()] | RequestContext.t(), TapPlan.t() | nil, keyword()) ::
           ForwardTrace.t()
@@ -21,25 +19,29 @@ defmodule Trinity.Crucible.TraceAdapter do
     trace_id =
       Keyword.get(opts, :trace_id) || context.trace_ref || "trace:crucible:#{hash(logits)}"
 
-    model_ref = Keyword.get(opts, :model_ref) || model_ref(logits, context)
+    model_id = Keyword.get(opts, :model_id) || model_id(logits, context)
+    run_id = Keyword.get(opts, :run_id) || context.coordination_run_ref
     values = logits_values(logits)
-    final_ref = final_logits_ref(trace_id, model_ref, length(values))
-    final_record = final_logits_record(final_ref, values)
+    final_record = final_logits_record(trace_id, run_id, model_id, values, logits)
     trajectory = trajectory_from_plan(tap_plan, logits)
 
     ForwardTrace.new!(
       trace_id: trace_id,
-      model_ref: model_ref,
+      run_id: run_id,
+      provider_kind: :trinity_route_logits,
+      model_id: model_id,
+      model_family: :route_logits,
+      backend: logits.backend_label || logits.runtime_profile,
       input_hash: logits.transcript_hash || hash(context.messages),
       tap_plan_ref: tap_plan && tap_plan.plan_id,
-      signal_records: [final_record],
+      signals: [final_record],
       layer_trajectory: trajectory,
-      final_logits: final_ref,
+      final_logits: final_record,
       policy_decision_refs: [],
       metadata: %{
         task_type: context.task_type,
         runtime_profile: logits.runtime_profile,
-        runtime_kind: :legacy_route_logits_adapter,
+        runtime_kind: :route_logits_adapter,
         logit_margin: margin(logits),
         token_count: logits.token_count,
         route_hash_inputs: logits.route_hash_inputs
@@ -59,14 +61,14 @@ defmodule Trinity.Crucible.TraceAdapter do
       trace_id: trace.trace_id,
       policy_ref: Keyword.get(opts, :policy_ref, "trinity:crucible:route-logits-policy"),
       selected_target: target,
-      selected_model: trace.model_ref,
+      selected_model: trace.model_id,
       confidence: confidence,
       uncertainty: %CruciblePolicy.Uncertainty{
         margin: margin(logits),
         policy_confidence: confidence,
         metadata: %{source: :route_logits_adapter}
       },
-      evidence_refs: Enum.map(trace.signal_records, & &1.signal_ref.signal_id),
+      evidence_refs: Enum.map(trace.signals, & &1.signal_id),
       metadata: %{
         adapter: :trinity_route_logits,
         selected_agent_id: logits.selected_agent_id,
@@ -94,10 +96,10 @@ defmodule Trinity.Crucible.TraceAdapter do
     %{
       schema: "trinity.crucible.forward_trace.v1",
       trace_id: trace.trace_id,
-      model_ref: trace.model_ref,
+      model_id: trace.model_id,
       input_hash: trace.input_hash,
       tap_plan_ref: trace.tap_plan_ref,
-      signals: Enum.map(trace.signal_records, &signal_record_map/1),
+      signals: Enum.map(trace.signals, &signal_record_map/1),
       trajectory: trajectory_map(trace.layer_trajectory),
       final_logits_ref: trace.final_logits && trace.final_logits.signal_id,
       policy_decision_refs: trace.policy_decision_refs,
@@ -110,12 +112,12 @@ defmodule Trinity.Crucible.TraceAdapter do
     token_index = Keyword.get(opts, :token_index, 0)
 
     [JSONL.trace_start(trace.trace_id)] ++
-      Enum.map(trace.signal_records, fn record ->
-        JSONL.signal_record(
-          trace.trace_id,
-          record.signal_ref.token_index || token_index,
-          record.signal_ref.layer_index,
-          record
+      Enum.map(trace.signals, fn record ->
+        JSONL.v4_event(:signal_record,
+          trace_id: trace.trace_id,
+          token_index: record.token_index || token_index,
+          layer: record.layer_index,
+          signal: record
         )
       end) ++
       [
@@ -126,11 +128,6 @@ defmodule Trinity.Crucible.TraceAdapter do
         ),
         JSONL.trace_end(trace.trace_id, %{digest: ForwardTrace.digest(trace)})
       ]
-  end
-
-  @spec to_aitrace_evidence(ForwardTrace.t()) :: {:ok, map()} | {:error, term()}
-  def to_aitrace_evidence(%ForwardTrace{} = trace) do
-    @aitrace_export.to_evidence(trace)
   end
 
   defp request_context(%RequestContext{} = context, _opts), do: context
@@ -146,21 +143,26 @@ defmodule Trinity.Crucible.TraceAdapter do
     )
   end
 
-  defp final_logits_ref(trace_id, model_ref, count) do
-    SignalRef.for_final_logits(
-      trace_id: trace_id,
-      signal_id: "trinity:final_logits:#{hash({trace_id, model_ref})}",
-      model_ref: model_ref,
-      shape: [count],
-      capture_mode: :summary
-    )
-  end
+  defp final_logits_record(trace_id, run_id, model_id, values, %RouteLogits{} = logits) do
+    summary = TensorSummary.compute(values, entropy: true, top_k: 4)
 
-  defp final_logits_record(%SignalRef{} = ref, values) do
     SignalRecord.new!(
-      signal_ref: ref,
-      summary: TensorSummary.from_list(values, entropy: true, top_k: 4),
-      capture_mode: :summary,
+      trace_id: trace_id,
+      run_id: run_id,
+      signal_id: "trinity:final_logits:#{hash({trace_id, model_id})}",
+      signal_type: :final_logits,
+      provider_kind: :trinity_route_logits,
+      model_id: model_id,
+      model_family: :route_logits,
+      backend: logits.backend_label || logits.runtime_profile,
+      dtype: summary.dtype,
+      shape: summary.shape,
+      rank: summary.rank,
+      token_index: 0,
+      node_name: "trinity.route_logits",
+      capture_method: :route_logits_projection,
+      capability_status: :captured,
+      tensor_summary: summary,
       metadata: %{source: :trinity_route_logits}
     )
   end
@@ -202,11 +204,11 @@ defmodule Trinity.Crucible.TraceAdapter do
 
   defp signal_record_map(%SignalRecord{} = record) do
     %{
-      signal_id: record.signal_ref.signal_id,
-      signal_type: record.signal_ref.signal_type,
-      capture_mode: record.capture_mode,
-      summary: record.summary,
-      value_ref: record.value_ref,
+      signal_id: record.signal_id,
+      signal_type: record.signal_type,
+      capture_method: record.capture_method,
+      tensor_summary: record.tensor_summary,
+      tensor_ref: record.tensor_ref,
       metadata: record.metadata
     }
   end
@@ -232,7 +234,7 @@ defmodule Trinity.Crucible.TraceAdapter do
 
   defp numeric_list(_values), do: []
 
-  defp model_ref(%RouteLogits{} = logits, %RequestContext{} = context) do
+  defp model_id(%RouteLogits{} = logits, %RequestContext{} = context) do
     cond do
       is_binary(logits.backend_label) -> logits.backend_label
       is_atom(logits.backend_label) -> Atom.to_string(logits.backend_label)

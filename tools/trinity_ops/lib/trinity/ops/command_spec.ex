@@ -263,7 +263,6 @@ defmodule Trinity.Ops.CommandSpec do
     [
       artifact_dir: :string,
       runtime_profile: :string,
-      via: :string,
       case: :keep,
       out: :string,
       no_assert: :boolean,

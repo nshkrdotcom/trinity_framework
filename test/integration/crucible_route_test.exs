@@ -15,22 +15,14 @@ defmodule TrinityFramework.Integration.CrucibleRouteTest do
     :ok
   end
 
-  test "single-node route supports legacy and Crucible paths with matching route targets" do
+  test "single-node route produces Crucible route targets" do
     messages = [%{"role" => "user", "content" => "Route this deterministic prompt."}]
 
     {:ok, runtime} =
       SingleNode.load_runtime(runtime_profile: :mock_tiny, messages: messages)
 
-    assert {:ok, legacy} =
-             SingleNode.route(messages,
-               runtime: runtime,
-               runtime_profile: :mock_tiny,
-               coordination_run_ref: "run:legacy"
-             )
-
     assert {:ok, crucible} =
              SingleNode.route(messages,
-               via: :crucible,
                runtime: runtime,
                runtime_profile: :mock_tiny,
                coordination_run_ref: "run:crucible",
@@ -38,8 +30,8 @@ defmodule TrinityFramework.Integration.CrucibleRouteTest do
              )
 
     assert %RouteDecision{} = crucible.decision
-    assert crucible.decision.selected_role_id == legacy.decision.selected_role_id
-    assert crucible.decision.selected_agent_id == legacy.decision.selected_agent_id
+    assert is_integer(crucible.decision.selected_role_id)
+    assert is_integer(crucible.decision.selected_agent_id)
     assert crucible.decision.router_artifact_ref == "crucible_policy:trinity_route_logits"
     assert crucible.crucible_trace.trace_id == "trace:crucible"
     assert crucible.tap_plan.plan_id =~ "trinity:crucible:"
@@ -56,7 +48,6 @@ defmodule TrinityFramework.Integration.CrucibleRouteTest do
 
     assert {:ok, result} =
              SingleNode.route(messages,
-               via: :crucible,
                runtime_profile: :mock_tiny,
                trace_path: trace_path,
                trace_ref: "trace:crucible-jsonl",

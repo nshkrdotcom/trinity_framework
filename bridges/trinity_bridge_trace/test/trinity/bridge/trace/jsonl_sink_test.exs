@@ -135,26 +135,36 @@ defmodule Trinity.Bridge.Trace.JsonlSinkTest do
   end
 
   defp crucible_trace do
-    ref =
-      CrucibleSignal.SignalRef.for_final_logits(
-        trace_id: "trace:crucible",
-        signal_id: "signal:final",
-        model_ref: "model:fixture",
-        shape: [3]
-      )
-
     record =
-      CrucibleSignalTrace.SignalRecord.new!(
-        signal_ref: ref,
-        summary: CrucibleSignal.TensorSummary.from_list([0.1, 0.2, 0.3], entropy: true)
+      Crucible.SignalRecord.new!(
+        trace_id: "trace:crucible",
+        run_id: "run:crucible",
+        signal_id: "signal:final",
+        signal_type: :final_logits,
+        provider_kind: :fixture,
+        model_id: "model:fixture",
+        model_family: :fixture,
+        backend: :fixture,
+        dtype: :f64,
+        shape: [3],
+        rank: 1,
+        token_index: 0,
+        node_name: "final_logits",
+        capture_method: :fixture,
+        capability_status: :captured,
+        tensor_summary: Crucible.TensorSummary.compute([0.1, 0.2, 0.3], entropy: true)
       )
 
-    CrucibleSignalTrace.ForwardTrace.new!(
+    Crucible.ForwardTrace.new!(
       trace_id: "trace:crucible",
-      model_ref: "model:fixture",
+      run_id: "run:crucible",
+      provider_kind: :fixture,
+      model_id: "model:fixture",
+      model_family: :fixture,
+      backend: :fixture,
       input_hash: "input:hash",
-      signal_records: [record],
-      final_logits: ref,
+      signals: [record],
+      final_logits: record,
       metadata: %{task_type: :verification}
     )
   end

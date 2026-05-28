@@ -21,7 +21,7 @@ defmodule Trinity.Ops.NativeTasksTest do
     assert trace_events(trace_path) |> Enum.member?("provider_called")
   end
 
-  test "mock loop emits the compatibility trace events" do
+  test "mock loop emits the route trace events" do
     trace_path = tmp_path("mock_loop.jsonl")
 
     assert :ok =
@@ -39,7 +39,7 @@ defmodule Trinity.Ops.NativeTasksTest do
     assert trace_events(trace_path) |> Enum.member?("provider_called")
   end
 
-  test "crucible matrix eval writes strict diff report" do
+  test "crucible matrix eval writes strict route report" do
     out = tmp_path("crucible_matrix.json")
 
     assert :ok =
@@ -54,17 +54,16 @@ defmodule Trinity.Ops.NativeTasksTest do
 
     report = Jason.decode!(File.read!(out))
     assert report["accepted?"] == true
-    assert get_in(report, ["metrics", "role_concordance"]) == 1.0
+    assert get_in(report, ["metrics", "contract_strictness"]) == 1.0
+    assert Enum.all?(report["rows"], &(&1["trace_signal_count"] > 0))
   end
 
-  test "trinity eval routes qwen eval through crucible wrapper" do
+  test "trinity eval routes qwen eval through Crucible matrix eval" do
     out = tmp_path("crucible_eval.json")
 
     assert :ok =
              Tasks.run(:trinity_eval, [
                "qwen_router_prompt_eval",
-               "--via",
-               "crucible",
                "--runtime-profile",
                "mock_tiny",
                "--max-cases",

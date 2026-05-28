@@ -35,10 +35,16 @@ defmodule Trinity.SingleNode.RouteRoundTripTest do
     assert result.decision.transcript_hash ==
              "6f7d00cd47d137afbaf4bf479a305cd2e11b5ceb4138230648eb21a57c9e5106"
 
-    decoded = trace_path |> File.read!() |> String.trim() |> Jason.decode!()
-    assert decoded["event"] == "route_selected"
-    assert decoded["transcript_hash"] == result.decision.transcript_hash
-    assert decoded["token_count"] == 4
+    decoded_events =
+      trace_path
+      |> File.stream!()
+      |> Enum.map(&Jason.decode!/1)
+
+    route_event = Enum.find(decoded_events, &(&1["event"] == "route_selected"))
+
+    assert route_event["transcript_hash"] == result.decision.transcript_hash
+    assert route_event["token_count"] == 4
+    assert Enum.any?(decoded_events, &(&1["event"] == "crucible_forward_trace"))
   end
 
   defp tmp_path(label) do

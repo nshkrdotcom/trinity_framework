@@ -1,12 +1,12 @@
 defmodule Trinity.Bridge.Trace.JsonlSink do
   @moduledoc """
-  `Trinity.Coordinator.TraceSink` implementation that writes compatibility JSONL.
+  `Trinity.Coordinator.TraceSink` implementation that writes Trinity JSONL.
   """
 
   @behaviour Trinity.Coordinator.TraceSink
 
   alias AITrace.{Event, Span}
-  alias CrucibleSignalTrace.ForwardTrace
+  alias Crucible.ForwardTrace
   alias Trinity.Bridge.Trace.{JSONL, Redactor}
   alias Trinity.Coordinator.TraceEvent
 
@@ -142,28 +142,28 @@ defmodule Trinity.Bridge.Trace.JsonlSink do
         run_id: run_id,
         timestamp_ms: timestamp_ms,
         trace_id: trace.trace_id,
-        model_ref: trace.model_ref,
+        model_id: trace.model_id,
         input_hash: trace.input_hash,
         tap_plan_ref: trace.tap_plan_ref,
-        signal_count: length(trace.signal_records),
+        signal_count: length(trace.signals),
         final_logits_ref: trace.final_logits && trace.final_logits.signal_id,
         metadata: redact_payload(sink, trace.metadata)
       }
     ] ++
-      Enum.map(trace.signal_records, fn record ->
+      Enum.map(trace.signals, fn record ->
         %{
           schema_version: sink.schema_version,
           event: :crucible_signal_record,
           run_id: run_id,
           timestamp_ms: timestamp_ms,
           trace_id: trace.trace_id,
-          signal_id: record.signal_ref.signal_id,
-          signal_type: record.signal_ref.signal_type,
-          layer_index: record.signal_ref.layer_index,
-          token_index: record.signal_ref.token_index,
-          capture_mode: record.capture_mode,
-          summary: redact_payload(sink, normalize_structs(record.summary)),
-          value_ref: record.value_ref,
+          signal_id: record.signal_id,
+          signal_type: record.signal_type,
+          layer_index: record.layer_index,
+          token_index: record.token_index,
+          capture_method: record.capture_method,
+          summary: redact_payload(sink, normalize_structs(record.tensor_summary)),
+          tensor_ref: record.tensor_ref,
           metadata: redact_payload(sink, record.metadata)
         }
       end)

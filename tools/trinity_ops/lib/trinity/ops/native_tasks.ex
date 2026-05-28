@@ -1,10 +1,9 @@
 defmodule Trinity.Ops.NativeTasks do
   @moduledoc """
-  Framework-owned implementations for the legacy `mix trinity.*` operator tasks.
+  Framework-owned implementations for the `mix trinity.*` operator tasks.
 
   These tasks intentionally call the deconstructed framework packages directly.
-  The deprecated coordinator repo may delegate here, but this module must not
-  call back into `trinity_coordinator`.
+  This module must not call back into `trinity_coordinator`.
   """
 
   alias Crucible.Policy.PolicyPlan, as: CruciblePolicyPlan
@@ -25,7 +24,7 @@ defmodule Trinity.Ops.NativeTasks do
   alias SelfHostedInferenceCore.CrucibleRuntime
   alias Trinity.Bridge.Trace.JsonlSink
   alias Trinity.Coordinator.TraceEvent
-  alias Trinity.Crucible.{DiffReport, TraceAdapter}
+  alias Trinity.Crucible.TraceAdapter
   alias Trinity.Ops.CommandSpec
   alias Trinity.SingleNode.Config
 
@@ -281,76 +280,14 @@ defmodule Trinity.Ops.NativeTasks do
   defp eval(opts) do
     case Keyword.get(opts, :_args, []) do
       ["qwen_router_prompt_eval"] ->
-        via = normalize_via(Keyword.get(opts, :via, "legacy"))
-
-        case via do
-          :legacy_route_logits -> qwen_router_prompt_eval_smoke(opts)
-          :crucible -> crucible_matrix_eval(opts)
-        end
+        crucible_matrix_eval(opts)
 
       [] ->
-        Mix.raise("usage: mix trinity.eval qwen_router_prompt_eval [--via legacy|crucible]")
+        Mix.raise("usage: mix trinity.eval qwen_router_prompt_eval")
 
       [other | _rest] ->
         Mix.raise("unknown eval suite: #{other}")
     end
-  end
-
-  defp qwen_router_prompt_eval_smoke(opts) do
-    start_app!()
-
-    artifact_dir = Keyword.get(opts, :artifact_dir, default_artifact_dir())
-    runtime_profile = runtime_profile(Keyword.get(opts, :runtime_profile), :mock_tiny)
-    max_cases = Keyword.get(opts, :max_cases)
-    selected_ids = Keyword.get_values(opts, :case)
-    cases = prompt_eval_cases(selected_ids, max_cases)
-
-    banner("TRINITY EVAL qwen_router_prompt_eval")
-    kv("Runtime profile", runtime_profile)
-    kv("Route path", :legacy_route_logits)
-    kv("Cases", length(cases))
-
-    {:ok, runtime} =
-      Trinity.SingleNode.load_runtime(
-        runtime_profile: runtime_profile,
-        artifact_root: artifact_dir,
-        messages: []
-      )
-
-    results =
-      Enum.map(cases, fn case_spec ->
-        {:ok, route} =
-          Trinity.SingleNode.route(case_messages(case_spec),
-            runtime: runtime,
-            runtime_profile: runtime_profile,
-            artifact_root: artifact_dir
-          )
-
-        %{
-          id: Map.fetch!(case_spec, "id"),
-          role_id: route.decision.selected_role_id,
-          agent_id: route.decision.selected_agent_id,
-          confidence_band: route.decision.confidence_band,
-          route_hash: route.decision.route_hash
-        }
-      end)
-
-    if out = Keyword.get(opts, :out) do
-      ArtifactIO.write_json!(
-        out,
-        %{
-          "schema" => "trinity.eval.qwen_router_prompt_eval.v1",
-          "runtime_profile" => Atom.to_string(runtime_profile),
-          "via" => "legacy_route_logits",
-          "cases" => normalize_for_json(results)
-        }
-      )
-
-      kv("Wrote eval snapshot", out)
-    end
-
-    kv("Evaluated cases", length(results))
-    pass("TRINITY EVAL qwen_router_prompt_eval")
   end
 
   defp crucible_inspect(opts) do
@@ -378,7 +315,6 @@ defmodule Trinity.Ops.NativeTasks do
 
     {:ok, route} =
       Trinity.SingleNode.route(initial_messages(message),
-        via: :crucible,
         runtime_profile: runtime_profile,
         artifact_root: artifact_dir,
         trace_path: trace_path,
@@ -487,7 +423,7 @@ defmodule Trinity.Ops.NativeTasks do
       print_payload(payload)
       pass("TRINITY CRUCIBLE LIVE INSPECT")
     after
-      :ok = CrucibleRuntime.release(lease)
+      :ok = CrucibleRuntime.release(lease, timeout: max(forward_timeout_ms, 30_000))
       terminate_live_runtime(pid)
     end
   end
@@ -530,19 +466,9 @@ defmodule Trinity.Ops.NativeTasks do
       Enum.map(cases, fn case_spec ->
         messages = case_messages(case_spec)
 
-        {legacy_us, {:ok, legacy}} =
-          timed(fn ->
-            Trinity.SingleNode.route(messages,
-              runtime: runtime,
-              runtime_profile: runtime_profile,
-              artifact_root: artifact_dir
-            )
-          end)
-
         {crucible_us, {:ok, crucible}} =
           timed(fn ->
             Trinity.SingleNode.route(messages,
-              via: :crucible,
               runtime: runtime,
               runtime_profile: runtime_profile,
               artifact_root: artifact_dir,
@@ -551,28 +477,35 @@ defmodule Trinity.Ops.NativeTasks do
             )
           end)
 
+        trace = crucible.crucible_trace
+
         %{
           id: Map.fetch!(case_spec, "id"),
-          legacy: legacy.decision,
           crucible: crucible.decision,
+          trace_id: trace.trace_id,
+          trace_model_id: trace.model_id,
+          trace_provider_kind: trace.provider_kind,
+          trace_signal_count: length(trace.signals),
+          final_logits_signal_id: trace.final_logits && trace.final_logits.signal_id,
+          expected_role_id: expected_role_id(case_spec),
+          expected_role_matched?:
+            crucible.decision.selected_role_id == expected_role_id(case_spec),
           safety_expected?: expected_role_id(case_spec) == 2,
-          trajectory_margin: trajectory_margin(crucible.crucible_trace),
+          trajectory_margin: trajectory_margin(trace),
           timings: %{
-            legacy_us: legacy_us,
-            crucible_us: crucible_us,
-            post_processing_overhead_ratio: 0.0
+            crucible_us: crucible_us
           }
         }
       end)
 
-    report = DiffReport.build(rows)
+    report = crucible_matrix_report(rows)
     File.mkdir_p!(Path.dirname(out))
     ArtifactIO.write_json!(out, normalize_for_json(report))
 
-    Mix.shell().info(DiffReport.format(report))
+    Mix.shell().info(format_crucible_matrix_report(report))
     kv("Wrote matrix report", out)
 
-    if not Keyword.get(opts, :no_assert, false) and not DiffReport.accepted?(report) do
+    if not Keyword.get(opts, :no_assert, false) and not report.accepted? do
       Mix.raise("trinity.crucible.matrix_eval failed strict acceptance criteria")
     end
 
@@ -618,6 +551,62 @@ defmodule Trinity.Ops.NativeTasks do
 
     print_payload(%{ok: true, mode: :trace, rows: rows, out: out})
     pass("TRINITY CRUCIBLE MATRIX EVAL TRACE")
+  end
+
+  defp crucible_matrix_report(rows) do
+    total = length(rows)
+    expected_role_matches = Enum.count(rows, & &1.expected_role_matched?)
+    strict_rows = Enum.count(rows, &strict_crucible_matrix_row?/1)
+
+    metrics = %{
+      total: total,
+      expected_role_matches: expected_role_matches,
+      expected_role_match_rate: ratio(expected_role_matches, total),
+      contract_strictness: ratio(strict_rows, total),
+      trajectory_margins: trajectory_margins(rows)
+    }
+
+    criteria = %{
+      contract_strictness?: metrics.contract_strictness == 1.0
+    }
+
+    %{
+      schema: "trinity.crucible.matrix_eval.v1",
+      rows: rows,
+      metrics: metrics,
+      criteria: criteria,
+      accepted?: Enum.all?(Map.values(criteria), &(&1 == true))
+    }
+  end
+
+  defp format_crucible_matrix_report(report) do
+    metrics = Map.fetch!(report, :metrics)
+    criteria = Map.fetch!(report, :criteria)
+
+    """
+    TRINITY Crucible Matrix Eval
+      cases: #{metrics.total}
+      expected role matches: #{metrics.expected_role_matches}
+      expected role match rate: #{pct(metrics.expected_role_match_rate)}
+      contract strictness: #{pct(metrics.contract_strictness)}
+
+    Acceptance
+      contract strictness == 100%: #{criteria.contract_strictness?}
+
+    Result: #{if report.accepted?, do: "PASS", else: "FAIL"}
+    """
+  end
+
+  defp strict_crucible_matrix_row?(row) do
+    decision = Map.fetch!(row, :crucible)
+
+    is_integer(decision.selected_role_id) and is_integer(decision.selected_agent_id) and
+      decision.confidence_band in [:high, :medium, :low, :unknown] and
+      is_binary(row.trace_id) and
+      is_binary(row.trace_model_id) and
+      is_atom(row.trace_provider_kind) and
+      is_integer(row.trace_signal_count) and row.trace_signal_count > 0 and
+      is_binary(row.final_logits_signal_id)
   end
 
   defp crucible_matrix_eval_live(opts) do
@@ -698,7 +687,7 @@ defmodule Trinity.Ops.NativeTasks do
       print_payload(report)
       pass("TRINITY CRUCIBLE MATRIX EVAL LIVE")
     after
-      :ok = CrucibleRuntime.release(lease)
+      :ok = CrucibleRuntime.release(lease, timeout: max(forward_timeout_ms, 30_000))
       terminate_live_runtime(pid)
     end
   end
@@ -920,6 +909,7 @@ defmodule Trinity.Ops.NativeTasks do
     [
       id: id,
       live_model?: true,
+      provider_module: SelfHostedInferenceBumblebee.CrucibleProvider,
       model_id: Keyword.get(opts, :model_id),
       tokenizer_id: Keyword.get(opts, :tokenizer_id),
       backend: Keyword.get(opts, :backend),
@@ -2746,31 +2736,40 @@ defmodule Trinity.Ops.NativeTasks do
 
   defp expected_role_id(case_spec), do: get_in(case_spec, ["expected", "role_id"])
 
-  defp normalize_via(nil), do: :legacy_route_logits
-  defp normalize_via(:legacy), do: :legacy_route_logits
-  defp normalize_via(:legacy_route_logits), do: :legacy_route_logits
-  defp normalize_via(:crucible), do: :crucible
-  defp normalize_via("legacy"), do: :legacy_route_logits
-  defp normalize_via("legacy_route_logits"), do: :legacy_route_logits
-  defp normalize_via("route_logits"), do: :legacy_route_logits
-  defp normalize_via("crucible"), do: :crucible
-  defp normalize_via(other), do: Mix.raise("unknown --via value #{inspect(other)}")
-
   defp timed(fun) when is_function(fun, 0) do
     start = System.monotonic_time(:microsecond)
     result = fun.()
     {System.monotonic_time(:microsecond) - start, result}
   end
 
-  defp trajectory_margin(%CrucibleSignalTrace.ForwardTrace{layer_trajectory: nil}), do: nil
+  defp trajectory_margin(%Crucible.ForwardTrace{layer_trajectory: nil}), do: nil
 
-  defp trajectory_margin(%CrucibleSignalTrace.ForwardTrace{layer_trajectory: trajectory}) do
+  defp trajectory_margin(%Crucible.ForwardTrace{layer_trajectory: trajectory}) do
     case CrucibleSignalTrace.LayerTrajectory.cosine_drifts(trajectory) do
       {:ok, []} -> nil
       {:ok, drifts} -> drifts |> Enum.map(& &1.distance) |> Enum.max()
       {:error, _reason} -> nil
     end
   end
+
+  defp trajectory_margins(rows) do
+    rows
+    |> Enum.map(& &1.trajectory_margin)
+    |> Enum.filter(&is_number/1)
+    |> case do
+      [] ->
+        %{min: nil, max: nil, mean: nil}
+
+      values ->
+        %{min: Enum.min(values), max: Enum.max(values), mean: Enum.sum(values) / length(values)}
+    end
+  end
+
+  defp ratio(_count, 0), do: 1.0
+  defp ratio(count, total), do: count / total
+
+  defp pct(value) when is_number(value),
+    do: :erlang.float_to_binary(value * 100.0, decimals: 2) <> "%"
 
   defp initial_messages(message), do: [%{"role" => "user", "content" => message}]
 

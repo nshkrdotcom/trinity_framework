@@ -55,7 +55,7 @@ defmodule Trinity.Ops.CommandSpecTest do
     ],
     trinity_demo: [],
     trinity_env_check: ["-a", "artifact", "-r", "cuda"],
-    trinity_eval: ["qwen_router_prompt_eval", "--via", "crucible", "--max-cases", "2"],
+    trinity_eval: ["qwen_router_prompt_eval", "--max-cases", "2"],
     trinity_gates: [
       "--summary-out",
       "tmp/gates.json",
@@ -238,9 +238,7 @@ defmodule Trinity.Ops.CommandSpecTest do
            ])[:trace_content] == "hash"
 
     assert CommandSpec.parse!(:trinity_eval, [
-             "qwen_router_prompt_eval",
-             "--via",
-             "crucible"
+             "qwen_router_prompt_eval"
            ])[:_args] == ["qwen_router_prompt_eval"]
 
     assert CommandSpec.parse!(:trinity_crucible_matrix_eval, [

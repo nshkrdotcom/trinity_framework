@@ -18,9 +18,11 @@ defmodule Trinity.CoordinatorCore.Boundary.NoLibOsEnvTest do
 
     out
     |> String.split("\n", trim: true)
-    |> Enum.filter(&(String.ends_with?(&1, ".ex") or String.ends_with?(&1, ".exs")))
+    |> Enum.filter(&(File.regular?(&1) and elixir_source?(&1)))
     |> Enum.flat_map(&forbidden_hits_in_file/1)
   end
+
+  defp elixir_source?(path), do: String.ends_with?(path, ".ex") or String.ends_with?(path, ".exs")
 
   defp forbidden_hits_in_file(path) do
     body = File.read!(path)

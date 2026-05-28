@@ -26,13 +26,13 @@ defmodule Trinity.Examples.QwenRouterPromptEval.SnapshotResolverTest do
     assert SnapshotResolver.resolve(:fake, nil, base_dir: dir) == profile_path
   end
 
-  test "legacy fixture is not an implicit fallback" do
+  test "root fixture is not an implicit fallback" do
     dir = tmp_dir()
     on_exit(fn -> File.rm_rf!(dir) end)
 
-    legacy_path = Path.join([dir, "fixtures", "qwen_router_prompt_eval_logits.json"])
-    File.mkdir_p!(Path.dirname(legacy_path))
-    File.write!(legacy_path, "{}")
+    root_path = Path.join([dir, "fixtures", "qwen_router_prompt_eval_logits.json"])
+    File.mkdir_p!(Path.dirname(root_path))
+    File.write!(root_path, "{}")
 
     assert SnapshotResolver.resolve(:cuda_exla, nil, base_dir: dir) == nil
   end

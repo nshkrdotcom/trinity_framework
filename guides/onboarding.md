@@ -2,8 +2,7 @@
 
 This repo is the new TRINITY source of truth. The root Mix project assembles the
 deconstructed framework packages, bridge packages, operator tasks, the
-single-node app, and the prompt-eval example. The old `trinity_coordinator` repo
-is only a deprecated compatibility shim.
+single-node app, and the prompt-eval example.
 
 ## Prerequisites
 

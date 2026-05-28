@@ -44,7 +44,7 @@ defmodule Trinity.SingleNode.TraceParityTest do
     "root_cause" => "ff8f30222327f6557e3e88cb4dd3503643cce27782416e508d77d227b1ccbe5c",
     "security_review" => "1536ff79f678270e272da2b787dc577fcaed2043728b044b8217f2e6a9cc37cd",
     "sql_query" => "9cdddde915f5110f0b5cc0ec45b42e5413d441ee51485ed8551f704e11be1dd4",
-    "strategic_tradeoff" => "97f03b64bd3e46cdc8f6086dfcdf724931a7808ef9d29fe79d2a33b8c4e908f4",
+    "strategic_tradeoff" => "d42969839cde07fe6e4f215a62e5ede53d6b03bd139a69ddf5a4c082f9e5ff94",
     "thinker_breakdown" => "c44455a24d47dd310798a6493eb7aeb98fcd5171fc266e277294031052ba15cb",
     "two_assistant_turns" => "5eb2280d8f6eb91f1241d5ba0750dc530c3e27872155b930802e7b48761254ec",
     "unicode_emoji" => "f4790e10ddc11476c2bc73cec9a52daeab3a6ed48a1f3d4f2af27eef88cf522e",

@@ -12,17 +12,15 @@
 # TRINITY Framework
 
 `trinity_framework` is the new source-of-truth TRINITY repository. The root
-Mix project is the assembled "monolith glue" distribution: it wires the
+Mix project is the assembled framework distribution: it wires the
 deconstructed contracts, coordinator behavior, Sakana artifact pipeline, bridge
 packages, single-node runtime, operator command surface, and eval example into
 one standalone checkout.
 
-The completion target for this repo is exact and testable: all functionality
-that existed on `main` in the old [trinity_coordinator](https://github.com/nshkrdotcom/trinity_coordinator) monolith must be
-ported here, adapted to the new architecture, and runnable from this root unless
-the behavior is intentionally documented as a compatibility-only shim. The old
-[trinity_coordinator](https://github.com/nshkrdotcom/trinity_coordinator) repo should end as a to-be-deprecated monolith hook-up for
-existing consumers, not as the owner of new runtime behavior.
+The completion target for this repo is exact and testable: all framework
+runtime, operator, bridge, eval, and Crucible assembly behavior is owned here
+through the deconstructed package architecture. There is no alternate old route
+mode in this repository.
 
 ## Status
 
@@ -42,7 +40,7 @@ The root project owns the operator-facing assembly:
 - `apps/trinity_single_node` is the standalone runtime app.
 - `tools/trinity_ops` owns every `mix trinity.*` operator command.
 - `examples/qwen_router_prompt_eval` owns the 37-case Qwen router prompt eval.
-- `examples/crucible_route` shows the reusable Crucible route adapter path.
+- `examples/crucible_route` shows the reusable Crucible route path.
 
 This repo is also the integration point for the nshkr stack. It must be able to
 run standalone and sit inside larger product, governance, execution, and testing
@@ -192,18 +190,15 @@ XLA_TARGET=cuda12 mix run lib/qwen_router_prompt_eval.exs -- \
 The eval asserts route decisions, margins, stable transcript fields, and
 determinism.
 
-The root eval wrapper can run the current route-logit path or the Crucible
-adapter path:
+The root eval wrapper runs the Crucible route-decision path:
 
 ```bash
 mix trinity.eval qwen_router_prompt_eval
-mix trinity.eval qwen_router_prompt_eval --via crucible
 ```
 
-The Crucible path compares route decisions only: exact role matching, target
-overlap, confidence bands, decision stability, trajectory margins, safety
-regressions, format strictness, and warmed post-processing overhead. It does
-not compare generated text unless both paths use the same generator.
+The Crucible path evaluates route-decision contract strictness, expected-role
+diagnostics, confidence bands, trajectory margins, and trace-derived evidence
+over the 37-case route suite. It does not compare generated text.
 
 ## Generate Safetensors
 

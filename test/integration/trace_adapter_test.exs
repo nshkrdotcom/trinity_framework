@@ -14,9 +14,9 @@ defmodule TrinityFramework.Integration.TraceAdapterTest do
 
     assert trace.trace_id == "trace:test"
     assert trace.tap_plan_ref == tap_plan.plan_id
-    assert [record] = trace.signal_records
-    assert record.signal_ref.signal_type == :final_logits
-    assert record.summary.entropy > 0.0
+    assert [record] = trace.signals
+    assert record.signal_type == :final_logits
+    assert record.tensor_summary.entropy > 0.0
 
     assert {:ok, [_ | _]} =
              CrucibleSignalTrace.LayerTrajectory.cosine_drifts(trace.layer_trajectory)

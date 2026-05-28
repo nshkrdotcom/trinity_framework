@@ -6,7 +6,7 @@ defmodule Trinity.Coordinator.RuntimeProfileRef do
   @enforce_keys [:name]
   defstruct [
     :name,
-    kind: :legacy_route_logits,
+    kind: :route_logits,
     require_cuda?: false,
     qwen_runtime?: false,
     artifact_runtime?: false,
@@ -17,7 +17,7 @@ defmodule Trinity.Coordinator.RuntimeProfileRef do
 
   @type t :: %__MODULE__{
           name: atom() | String.t(),
-          kind: :legacy_route_logits | :crucible | atom(),
+          kind: :route_logits | :crucible | atom(),
           require_cuda?: boolean(),
           qwen_runtime?: boolean(),
           artifact_runtime?: boolean(),

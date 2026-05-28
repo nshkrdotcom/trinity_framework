@@ -7,7 +7,7 @@ defmodule Trinity.SingleNode.RuntimeSupervisor do
 
   alias Trinity.Bridge.Inference.AgentCaller
   alias Trinity.Bridge.SelfHostedInference.RuntimeAdapter
-  alias Trinity.Bridge.Trace.{Hash, JsonlSink}
+  alias Trinity.Bridge.Trace.JsonlSink
 
   alias Trinity.Coordinator.{
     AdapterRef,
@@ -67,33 +67,10 @@ defmodule Trinity.SingleNode.RuntimeSupervisor do
 
   def route(messages, opts) when is_list(messages) do
     opts = normalize_opts(opts)
-
-    case route_path(opts) do
-      :crucible -> route_via_crucible(messages, opts)
-      :legacy_route_logits -> route_via_legacy_logits(messages, opts)
-      other -> {:error, {:unsupported_route_path, other}}
-    end
+    route_via_crucible(messages, opts)
   end
 
   def route(_messages, _opts), do: {:error, :invalid_messages}
-
-  defp route_via_legacy_logits(messages, opts) do
-    plan = extraction_plan(messages, opts)
-
-    with {:ok, runtime} <- runtime_for_plan(plan, opts),
-         {:ok, logits} <- RuntimeAdapter.route(runtime, plan, route_opts(opts)),
-         {:ok, decision} <- derive_decision(logits, messages, opts),
-         :ok <- maybe_trace_route(decision, opts) do
-      {:ok,
-       %{
-         runtime: runtime,
-         logits: logits,
-         decision: decision,
-         router_decision: RouteDecision.to_router_decision(decision),
-         trace_path: Keyword.get(opts, :trace_path)
-       }}
-    end
-  end
 
   defp route_via_crucible(messages, opts) do
     plan = extraction_plan(messages, opts)
@@ -171,24 +148,10 @@ defmodule Trinity.SingleNode.RuntimeSupervisor do
     end
   end
 
-  defp derive_decision(logits, _messages, opts) do
-    RouteDecisionDerivation.from_logits(logits, logits.transcript_hash,
-      router_decision_ref:
-        Keyword.get(opts, :router_decision_ref, generated_ref("route-decision")),
-      coordination_run_ref: coordination_run_ref(opts),
-      router_artifact_ref: artifact_ref_string(opts),
-      extractor_ref: "extractor:self_hosted_inference_bumblebee",
-      head_ref: head_ref(opts),
-      trace_ref: trace_ref(opts),
-      route_hash: Hash.term(logits.route_hash_inputs),
-      metadata: %{runtime_profile: runtime_profile(opts)}
-    )
-  end
-
   defp derive_crucible_decision(crucible_decision, %RequestContext{} = context, logits, opts) do
     DecisionAdapter.adapt(crucible_decision,
       request_context: context,
-      messages_or_hash: context.messages,
+      transcript_hash: logits.transcript_hash,
       token_count: logits.token_count,
       runtime_profile: crucible_runtime_profile(opts),
       coordination_run_ref: coordination_run_ref(opts),
@@ -330,7 +293,7 @@ defmodule Trinity.SingleNode.RuntimeSupervisor do
   defp runtime_profile_ref(profile) do
     %RuntimeProfileRef{
       name: profile,
-      kind: :legacy_route_logits,
+      kind: :route_logits,
       require_cuda?: profile == :cuda_exla,
       qwen_runtime?: profile != :mock_tiny,
       artifact_runtime?: profile != :mock_tiny,
@@ -356,21 +319,8 @@ defmodule Trinity.SingleNode.RuntimeSupervisor do
       coordination_run_ref: coordination_run_ref(opts),
       runtime_profile: crucible_runtime_profile(opts),
       capabilities: [:route_logits],
-      metadata: %{route_path: route_path(opts)}
+      metadata: %{route_path: :crucible}
     )
-  end
-
-  defp route_path(opts) do
-    case Keyword.get(opts, :via, Keyword.get(opts, :route_path, :legacy_route_logits)) do
-      :legacy -> :legacy_route_logits
-      :legacy_route_logits -> :legacy_route_logits
-      "legacy" -> :legacy_route_logits
-      "legacy_route_logits" -> :legacy_route_logits
-      "route_logits" -> :legacy_route_logits
-      :crucible -> :crucible
-      "crucible" -> :crucible
-      other -> other
-    end
   end
 
   defp adapter_ref(:mock_tiny, opts) do
@@ -413,7 +363,6 @@ defmodule Trinity.SingleNode.RuntimeSupervisor do
   defp artifact_ref_string(opts),
     do: Keyword.get(opts, :artifact_ref, "artifact:qwen3-0.6b-sakana")
 
-  defp head_ref(opts), do: Keyword.get(opts, :head_ref, "head:qwen3-0.6b-sakana")
   defp trace_ref(opts), do: Keyword.get(opts, :trace_ref, "trace:single-node")
 
   defp coordination_run_ref(opts),

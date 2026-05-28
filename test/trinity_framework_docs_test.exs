@@ -65,7 +65,7 @@ defmodule TrinityFrameworkDocsTest do
     {"crucible path",
      [
        "mix trinity.crucible.matrix_eval",
-       "mix trinity.eval qwen_router_prompt_eval --via crucible"
+       "mix trinity.eval qwen_router_prompt_eval"
      ]},
     {"python torch provider",
      [
@@ -108,28 +108,31 @@ defmodule TrinityFrameworkDocsTest do
     assert missing == []
   end
 
-  test "docs keep trinity_framework as owner and trinity_coordinator as deprecated shim" do
+  test "docs keep trinity_framework as owner" do
     corpus = docs_corpus()
 
     assert String.contains?(corpus, "trinity_framework` is the new source-of-truth")
-    assert String.contains?(corpus, "deprecated compatibility shim")
-    assert String.contains?(corpus, "to-be-deprecated monolith hook")
 
     forbidden_strings = [
       "git clone https://github.com/nshkrdotcom/trinity_coordinator",
       "cd trinity_coordinator",
       "trinity_coordinator` is the new source-of-truth",
       "trinity_coordinator` owns new runtime behavior",
-      "trinity_coordinator` is the root aggregate"
+      "trinity_coordinator` is the root aggregate",
+      ~r/deprecated\s+compatibility\s+shim/,
+      "to-be-deprecated monolith hook"
     ]
 
     offenders =
       for forbidden <- forbidden_strings,
-          String.contains?(corpus, forbidden),
+          forbidden_doc_claim?(corpus, forbidden),
           do: forbidden
 
     assert offenders == []
   end
+
+  defp forbidden_doc_claim?(corpus, %Regex{} = forbidden), do: Regex.match?(forbidden, corpus)
+  defp forbidden_doc_claim?(corpus, forbidden), do: String.contains?(corpus, forbidden)
 
   defp docs_corpus do
     @required_docs

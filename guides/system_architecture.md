@@ -1,8 +1,7 @@
 # System Architecture
 
-`trinity_framework` replaces the old monolithic `trinity_coordinator` runtime
-with a deconstructed architecture that is still assembled from the root Mix
-project.
+`trinity_framework` is the source-of-truth TRINITY runtime with a
+deconstructed architecture assembled from the root Mix project.
 
 ## Ownership
 
@@ -22,9 +21,6 @@ The next-generation forward-pass substrate is Crucible-owned. Trinity consumes
 `crucible_policy` decisions; reusable signal capture and Bumblebee/Nx/Axon
 adapter logic stays in the new `crucible_*` packages.
 
-`trinity_coordinator` owns no new runtime implementation. It remains a v2 shim
-for one release window so old imports and `mix trinity.*` commands keep working.
-
 ## Package Map
 
 - `core/trinity_contracts`: public `Trinity.*` refs, DTOs, and behaviors.
@@ -40,9 +36,9 @@ for one release window so old imports and `mix trinity.*` commands keep working.
   `:inference`.
 - `bridges/trinity_bridge_trace`: AITrace-compatible JSONL, hash, context, and
   redaction bridge.
-- `tools/trinity_ops`: framework-owned implementation of old operator tasks.
+- `tools/trinity_ops`: framework-owned implementation of operator tasks.
 - `examples/qwen_router_prompt_eval`: 37-case prompt routing eval.
-- `examples/crucible_route`: minimal `via: :crucible` route example.
+- `examples/crucible_route`: minimal Crucible route example.
 - `../../North-Shore-AI/crucible_signal`: forward-pass signal ontology.
 - `../../North-Shore-AI/crucible_tap`: tap-plan contracts and capability
   negotiation.
@@ -62,9 +58,8 @@ side through public TRINITY contracts and generic projection references.
 ## Runtime Flow
 
 1. Build a `CrucibleTap.TapPlan` from `Trinity.Crucible.RequestContext`.
-2. Run either the current route-logits runtime adapter or a native
-   Crucible-capable model runtime.
-3. Produce a bounded `CrucibleSignalTrace.ForwardTrace`.
+2. Run the configured Crucible-capable model runtime.
+3. Produce a bounded `%Crucible.ForwardTrace{}`.
 4. Produce a `CruciblePolicy.RouteDecision`.
 5. Adapt that decision into `Trinity.Coordinator.RouteDecision` through
    `Trinity.Crucible.DecisionAdapter`.

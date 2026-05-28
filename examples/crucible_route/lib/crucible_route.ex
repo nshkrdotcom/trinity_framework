@@ -8,7 +8,6 @@ defmodule Trinity.Examples.CrucibleRoute do
     messages = [%{"role" => "user", "content" => message}]
 
     Trinity.SingleNode.route(messages,
-      via: :crucible,
       runtime_profile: Keyword.get(opts, :runtime_profile, :mock_tiny),
       artifact_root: Keyword.get(opts, :artifact_root),
       trace_path: Keyword.get(opts, :trace_path),

@@ -67,13 +67,11 @@ The framework root also exposes smoke-friendly route eval wrappers:
 
 ```bash
 mix trinity.eval qwen_router_prompt_eval
-mix trinity.eval qwen_router_prompt_eval --via crucible
 mix trinity.crucible.matrix_eval --runtime-profile mock_tiny
 ```
 
-`mix trinity.eval qwen_router_prompt_eval --via crucible` uses the Crucible
-route adapter and prints the same strict route-decision acceptance criteria as
-`mix trinity.crucible.matrix_eval`. The diff report compares route decisions,
-confidence bands, trajectory margins, safety regressions, format strictness,
-and warmed post-processing overhead; it does not compare generated text across
-different generators.
+`mix trinity.eval qwen_router_prompt_eval` uses the Crucible route path and
+prints the same strict route-decision acceptance criteria as
+`mix trinity.crucible.matrix_eval`. The report covers route decisions,
+confidence bands, trajectory margins, safety expectations, expected-role
+diagnostics, and contract strictness; it does not compare generated text.
