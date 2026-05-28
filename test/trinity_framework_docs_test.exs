@@ -14,6 +14,7 @@ defmodule TrinityFrameworkDocsTest do
     guides/runtime_profiles.md
     guides/evals.md
     guides/python_parity_reconstruction.md
+    guides/python_torch_trace_provider.md
     guides/stage_checks_and_tolerances.md
     guides/svd_generation_runbook.md
     guides/provider_service_hardening.md
@@ -65,6 +66,12 @@ defmodule TrinityFrameworkDocsTest do
      [
        "mix trinity.crucible.matrix_eval",
        "mix trinity.eval qwen_router_prompt_eval --via crucible"
+     ]},
+    {"python torch provider",
+     [
+       "tools/python/crucible_torch_trace.py",
+       "tmp/crucible_v5/traces/python",
+       "generation_step_logits"
      ]},
     {"runtime profiles", ["mock_tiny", "cuda_exla"]},
     {"parity", ["mix trinity.parity.check", "mix trinity.sakana.parity_sample"]},

@@ -50,6 +50,7 @@ defmodule TrinityFramework.Build.WeldContract do
     "guides/runtime_profiles.md",
     "guides/evals.md",
     "guides/python_parity_reconstruction.md",
+    "guides/python_torch_trace_provider.md",
     "guides/stage_checks_and_tolerances.md",
     "guides/svd_generation_runbook.md",
     "guides/provider_service_hardening.md",
@@ -74,7 +75,8 @@ defmodule TrinityFramework.Build.WeldContract do
     "LICENSE",
     "priv/sakana_trinity/artifact_pin.json",
     "priv/sakana_trinity/reference/sakana_python_reference_manifest.json",
-    "examples/qwen_router_prompt_eval/fixtures"
+    "examples/qwen_router_prompt_eval/fixtures",
+    "tools/python/crucible_torch_trace.py"
   ]
 
   def manifest do

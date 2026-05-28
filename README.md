@@ -347,6 +347,7 @@ acceptable for sign-off.
 - [Runtime Profiles](guides/runtime_profiles.md)
 - [Evals](guides/evals.md)
 - [Python Parity Reconstruction](guides/python_parity_reconstruction.md)
+- [Python Torch Trace Provider](guides/python_torch_trace_provider.md)
 - [Stage Checks And Tolerances](guides/stage_checks_and_tolerances.md)
 - [SVD Generation Runbook](guides/svd_generation_runbook.md)
 - [Provider Service Hardening](guides/provider_service_hardening.md)
@@ -392,17 +393,21 @@ MIT.
 
 ## V5 Status
 
-Status: `trinity-v5-live-replay-matrix-passing`.
+Status: `trinity-v5-live-replay-matrix-python-trace-passing`.
 
 The Crucible operator tasks support V5 artifact-backed trace replay, native
 hosted runtime live inspect, live matrix eval, role-boundary stability reports,
-and policy/route decision artifact emission:
+policy/route decision artifact emission, and external Python/PyTorch trace
+production for model internals that Bumblebee does not expose:
 
 ```bash
 mix trinity.crucible.inspect --trace tmp/crucible_v5/traces/native/model_forward_live.trace.jsonl --artifact-root tmp/crucible_v5
 mix trinity.crucible.matrix_eval --trace tmp/crucible_v5/traces/native --artifact-root tmp/crucible_v5
 TRINITY_CRUCIBLE_LIVE=true mix trinity.crucible.inspect --live --model-id gpt2 --backend binary --artifact-root tmp/crucible_v5 --prompt "Hi"
 TRINITY_CRUCIBLE_LIVE=true mix trinity.crucible.matrix_eval --live --limit 37 --backend binary --artifact-root tmp/crucible_v5
+python3 tools/python/crucible_torch_trace.py --model-id gpt2 --artifact-root tmp/crucible_v5 --trace-name python_torch_gpt2_phase15
+mix trinity.crucible.inspect --trace tmp/crucible_v5/traces/python/python_torch_gpt2_phase15.trace.jsonl --artifact-root tmp/crucible_v5
 ```
 
-See [Trinity Live Inspect](guides/trinity_live_inspect.md).
+See [Trinity Live Inspect](guides/trinity_live_inspect.md) and
+[Python Torch Trace Provider](guides/python_torch_trace_provider.md).

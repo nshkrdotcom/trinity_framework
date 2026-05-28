@@ -39,6 +39,7 @@ defmodule TrinityFrameworkRootTest do
     guides/runtime_profiles.md
     guides/evals.md
     guides/python_parity_reconstruction.md
+    guides/python_torch_trace_provider.md
     guides/stage_checks_and_tolerances.md
     guides/svd_generation_runbook.md
     guides/provider_service_hardening.md

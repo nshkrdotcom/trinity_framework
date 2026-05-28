@@ -49,6 +49,14 @@ Useful live model options:
 --model-id trl-internal-testing/tiny-Qwen3ForCausalLM
 ```
 
+Run and replay a Python/PyTorch internals trace:
+
+```bash
+python3 tools/python/crucible_torch_trace.py --model-id gpt2 --artifact-root tmp/crucible_v5 --trace-name python_torch_gpt2_phase15
+mix trinity.crucible.inspect --trace tmp/crucible_v5/traces/python/python_torch_gpt2_phase15.trace.jsonl --artifact-root tmp/crucible_v5
+mix trinity.crucible.matrix_eval --trace tmp/crucible_v5/traces/python --artifact-root tmp/crucible_v5
+```
+
 ## Related guides
 
 - [Crucible Path](crucible_path.md)
