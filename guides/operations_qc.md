@@ -19,7 +19,7 @@ issues.
 ## Operator Gates
 
 ```bash
-mix trinity.gates --fast --summary-out tmp/trinity_gates.json
+mix trinity.gates --summary-out tmp/trinity_gates.json
 mix trinity.env.check
 mix help --search trinity
 ```

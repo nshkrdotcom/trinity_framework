@@ -11,7 +11,7 @@ artifact loading, provider dispatch, and trace output.
 Use mock profiles first:
 
 ```bash
-mix trinity.gates --fast
+mix trinity.gates
 mix trinity.route.demo --mock-provider --runtime-profile mock_tiny --max-turns 1
 ```
 

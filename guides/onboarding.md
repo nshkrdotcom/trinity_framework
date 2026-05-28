@@ -51,7 +51,7 @@ HF_HUB_OFFLINE=1 mix trinity.artifact.fetch --offline
 
 ```bash
 mix trinity.env.check
-mix trinity.gates --fast
+mix trinity.gates
 mix trinity.route.demo --mock-provider --runtime-profile mock_tiny --max-turns 1
 mix trinity.hitl.mock_loop --runtime-profile mock_tiny --max-turns 1
 ```
@@ -88,4 +88,3 @@ margins, transcript-stable fields, and deterministic route hashes in-process.
 - Standalone runtime: `apps/trinity_single_node`
 - Operator tasks: `tools/trinity_ops`
 - Prompt eval: `examples/qwen_router_prompt_eval`
-

@@ -42,7 +42,6 @@ defmodule Trinity.Ops.CommandSpec do
       trinity_gates: %{
         task: "trinity.gates",
         switches: [
-          skip_dialyzer: :boolean,
           skip_docs: :boolean,
           fast: :boolean,
           include_parity_check: :boolean,

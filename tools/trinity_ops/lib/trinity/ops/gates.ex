@@ -19,13 +19,7 @@ defmodule Trinity.Ops.Gates do
   @spec run([String.t()]) :: :ok
   def run(argv) do
     opts = CommandSpec.parse!(:trinity_gates, argv)
-    fast? = Keyword.get(opts, :fast, false)
-
-    steps =
-      @baseline_steps
-      |> maybe_drop(:dialyzer, fast? or Keyword.get(opts, :skip_dialyzer, false))
-      |> maybe_drop(:docs, fast? or Keyword.get(opts, :skip_docs, false))
-      |> Kernel.++(optional_steps(opts))
+    steps = steps(opts)
 
     started = System.monotonic_time(:millisecond)
     results = Enum.map(steps, &run_step/1)
@@ -40,6 +34,16 @@ defmodule Trinity.Ops.Gates do
     })
 
     if ok?, do: :ok, else: Mix.raise("trinity.gates failed")
+  end
+
+  @doc false
+  @spec steps(keyword()) :: [{atom(), [String.t()]}]
+  def steps(opts) do
+    fast? = Keyword.get(opts, :fast, false)
+
+    @baseline_steps
+    |> maybe_drop(:docs, fast? or Keyword.get(opts, :skip_docs, false))
+    |> Kernel.++(optional_steps(opts))
   end
 
   defp maybe_drop(steps, _name, false), do: steps

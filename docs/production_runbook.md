@@ -14,7 +14,7 @@ configuration.
 ```bash
 mix trinity.artifact.fetch
 mix ci
-mix trinity.gates --fast
+mix trinity.gates
 XLA_TARGET=cuda12 mix trinity.hitl.gpu
 XLA_TARGET=cuda12 mix trinity.hitl.vector
 XLA_TARGET=cuda12 mix trinity.hitl.head_route

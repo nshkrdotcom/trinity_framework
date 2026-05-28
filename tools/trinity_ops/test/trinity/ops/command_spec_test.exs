@@ -2,6 +2,7 @@ defmodule Trinity.Ops.CommandSpecTest do
   use ExUnit.Case, async: true
 
   alias Trinity.Ops.CommandSpec
+  alias Trinity.Ops.Gates
 
   @expected_tasks ~w(
     trinity.artifact.fetch
@@ -58,7 +59,6 @@ defmodule Trinity.Ops.CommandSpecTest do
     trinity_gates: [
       "--summary-out",
       "tmp/gates.json",
-      "--skip-dialyzer",
       "--skip-docs",
       "--include-parity-check",
       "--include-hex-build",
@@ -169,13 +169,25 @@ defmodule Trinity.Ops.CommandSpecTest do
     assert String.contains?(Exception.message(exception), "invalid options")
   end
 
+  test "rejects Dialyzer skip gate option" do
+    skip_prefix = "--skip-"
+    analyzer_name = "dialyzer"
+
+    exception =
+      assert_raise ArgumentError, fn ->
+        CommandSpec.parse!(:trinity_gates, [skip_prefix <> analyzer_name])
+      end
+
+    assert String.contains?(Exception.message(exception), "invalid options")
+  end
+
   test "parses the trinity.gates flag surface" do
     opts =
       CommandSpec.parse!(:trinity_gates, [
         "--summary-out",
         "tmp/gates.json",
-        "--skip-dialyzer",
         "--skip-docs",
+        "--fast",
         "--include-parity-check",
         "--include-hex-build",
         "--python-report",
@@ -185,12 +197,23 @@ defmodule Trinity.Ops.CommandSpecTest do
       ])
 
     assert opts[:summary_out] == "tmp/gates.json"
-    assert opts[:skip_dialyzer]
     assert opts[:skip_docs]
+    assert opts[:fast]
     assert opts[:include_parity_check]
     assert opts[:include_hex_build]
     assert opts[:python_report] == "python.json"
     assert opts[:elixir_report] == "elixir.json"
+  end
+
+  test "keeps static analysis gates in fast mode" do
+    step_names =
+      [fast: true, skip_docs: true]
+      |> Gates.steps()
+      |> Enum.map(&elem(&1, 0))
+
+    assert :credo in step_names
+    assert :dialyzer in step_names
+    refute :docs in step_names
   end
 
   test "parses representative flags from every task batch" do

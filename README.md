@@ -123,7 +123,7 @@ priv/sakana_trinity/adapted_qwen3_0_6b_layer26
 Safe mock-provider smoke checks:
 
 ```bash
-mix trinity.gates --fast
+mix trinity.gates
 mix trinity.route.demo \
   --mock-provider \
   --runtime-profile mock_tiny \
@@ -321,7 +321,7 @@ The final root acceptance target is:
 mix test
 mix ci
 mix help --search trinity
-mix trinity.gates --fast
+mix trinity.gates
 mix trinity.artifact.fetch
 XLA_TARGET=cuda12 mix trinity.hitl.gpu
 XLA_TARGET=cuda12 mix trinity.hitl.vector
