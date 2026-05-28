@@ -9,7 +9,7 @@ storage.
 - `Trinity.Trace` contract data.
 - `Trinity.Coordinator.TraceEvent` route and provider events.
 - `Trinity.Bridge.Trace.JSONL` and `JsonlSink` for local JSONL output.
-- AITrace-compatible payloads through `trinity_bridge_trace`.
+- AITrace-shaped payloads through `trinity_bridge_trace`.
 
 ## Rules
 

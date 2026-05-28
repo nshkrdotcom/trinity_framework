@@ -1,6 +1,6 @@
 # Python Torch Trace Provider
 
-Purpose: emit Crucible-compatible traces from real Hugging Face Transformers
+Purpose: emit Crucible trace events from real Hugging Face Transformers
 models through PyTorch when Elixir-native providers cannot expose required
 internals.
 

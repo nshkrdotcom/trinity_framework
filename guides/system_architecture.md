@@ -34,7 +34,7 @@ adapter logic stays in the new `crucible_*` packages.
   `self_hosted_inference_core` and `self_hosted_inference_bumblebee`.
 - `bridges/trinity_bridge_inference`: provider/agent caller bridge over
   `:inference`.
-- `bridges/trinity_bridge_trace`: AITrace-compatible JSONL, hash, context, and
+- `bridges/trinity_bridge_trace`: AITrace-shaped JSONL, hash, context, and
   redaction bridge.
 - `tools/trinity_ops`: framework-owned implementation of operator tasks.
 - `examples/qwen_router_prompt_eval`: 37-case prompt routing eval.
