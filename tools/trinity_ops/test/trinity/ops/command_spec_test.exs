@@ -30,7 +30,14 @@ defmodule Trinity.Ops.CommandSpecTest do
   @sample_args %{
     trinity_artifact_fetch: ["--pin", "pin.json", "--dest", "artifact", "--offline"],
     trinity_crucible_inspect: ["--runtime-profile", "mock_tiny", "--message", "hello"],
-    trinity_crucible_matrix_eval: ["--runtime-profile", "mock_tiny", "--max-cases", "2"],
+    trinity_crucible_matrix_eval: [
+      "--runtime-profile",
+      "mock_tiny",
+      "--max-cases",
+      "2",
+      "--artifact-root",
+      "tmp/crucible_v5"
+    ],
     trinity_crucible_transcript: [
       "--name",
       "sample",
@@ -217,7 +224,17 @@ defmodule Trinity.Ops.CommandSpecTest do
              "--runtime-profile",
              "mock_tiny",
              "--max-cases",
-             "3"
+             "3",
+             "--artifact-root",
+             "tmp/crucible_v5",
+             "--model-id",
+             "gpt2",
+             "--backend",
+             "binary",
+             "--architecture",
+             "for_causal_language_modeling",
+             "--stability-repeats",
+             "2"
            ])[:max_cases] == 3
 
     assert CommandSpec.parse!(:trinity_hitl_mock_loop, [

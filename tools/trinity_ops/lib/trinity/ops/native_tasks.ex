@@ -8,6 +8,7 @@ defmodule Trinity.Ops.NativeTasks do
   """
 
   alias Crucible.Policy.PolicyPlan, as: CruciblePolicyPlan
+  alias CrucibleBumblebee.Artifacts, as: CrucibleArtifacts
   alias CrucibleFactorization.SVD
   alias CrucibleModelRegistry.Pins.{ArtifactPin, Fetcher, Verifier}
   alias CrucibleSignalTrace.Ingest, as: CrucibleTraceIngest
@@ -418,12 +419,22 @@ defmodule Trinity.Ops.NativeTasks do
     trace = load_v4_trace!(trace_path)
     decision = CruciblePolicyPlan.evaluate(trace)
 
-    payload = crucible_v4_payload(:trace, trace, decision, trace_path)
+    artifact_paths =
+      persist_crucible_decision_artifacts(
+        :inspect_trace,
+        trace,
+        decision,
+        Keyword.put(opts, :artifact_suffix, Path.basename(trace_path))
+      )
 
-    if out = Keyword.get(opts, :out) do
-      ArtifactIO.write_json!(out, normalize_for_json(payload))
-      kv("Wrote inspect report", out)
-    end
+    payload =
+      :trace
+      |> crucible_v4_payload(trace, decision, trace_path)
+      |> Map.put(:artifact_paths, artifact_paths)
+
+    out = Keyword.get(opts, :out) || v5_report_path("inspect_trace_#{trace.trace_id}.json", opts)
+    ArtifactIO.write_json!(out, normalize_for_json(payload))
+    kv("Wrote inspect report", out)
 
     print_payload(payload)
     pass("TRINITY CRUCIBLE TRACE INSPECT")
@@ -436,27 +447,49 @@ defmodule Trinity.Ops.NativeTasks do
 
     prompt = Keyword.get(opts, :prompt) || Keyword.get(opts, :message) || "Hi"
     id = :"trinity-crucible-live-#{System.unique_integer([:positive])}"
+    artifact_root = v5_artifact_root(opts)
 
-    {:ok, pid} = CrucibleRuntime.start_child(id: id, live_model?: true)
+    trace_name =
+      Keyword.get(opts, :trace_name, "inspect_live_#{System.unique_integer([:positive])}")
+
+    forward_timeout_ms = Keyword.get(opts, :forward_timeout_ms, 240_000)
+
+    {:ok, pid} = CrucibleRuntime.start_child(crucible_live_runtime_opts(id, opts))
     {:ok, lease} = CrucibleRuntime.lease(pid, owner_ref: "trinity.crucible.inspect")
 
-    {:ok, trace} =
-      CrucibleRuntime.forward(pid, nil, %{prompt: prompt}, trace_name: "inspect_live")
+    try do
+      {:ok, trace} =
+        CrucibleRuntime.forward(pid, nil, %{prompt: prompt},
+          trace_name: trace_name,
+          timeout: forward_timeout_ms
+        )
 
-    :ok = CrucibleRuntime.release(lease)
+      decision = CruciblePolicyPlan.evaluate(trace)
+      trace_path = hosted_trace_path(trace_name, artifact_root)
 
-    decision = CruciblePolicyPlan.evaluate(trace)
+      artifact_paths =
+        persist_crucible_decision_artifacts(
+          :inspect_live,
+          trace,
+          decision,
+          with_trace_artifact_suffix(opts, trace_name)
+        )
 
-    payload =
-      crucible_v4_payload(:live, trace, decision, "tmp/crucible_v4/inspect_live.trace.jsonl")
+      payload =
+        :live
+        |> crucible_v4_payload(trace, decision, trace_path)
+        |> Map.put(:artifact_paths, artifact_paths)
 
-    if out = Keyword.get(opts, :out) do
+      out = Keyword.get(opts, :out) || v5_report_path("inspect_live_#{trace.trace_id}.json", opts)
       ArtifactIO.write_json!(out, normalize_for_json(payload))
       kv("Wrote live inspect report", out)
-    end
 
-    print_payload(payload)
-    pass("TRINITY CRUCIBLE LIVE INSPECT")
+      print_payload(payload)
+      pass("TRINITY CRUCIBLE LIVE INSPECT")
+    after
+      :ok = CrucibleRuntime.release(lease)
+      terminate_live_runtime(pid)
+    end
   end
 
   defp crucible_matrix_eval(opts) do
@@ -547,21 +580,32 @@ defmodule Trinity.Ops.NativeTasks do
   end
 
   defp crucible_matrix_eval_traces(opts) do
-    trace_paths = Keyword.get_values(opts, :trace)
-    out = Keyword.get(opts, :out, "tmp/trinity_crucible/matrix_eval_traces.json")
+    trace_paths = expanded_trace_paths!(Keyword.get_values(opts, :trace))
+    out = Keyword.get(opts, :out) || v5_report_path("matrix_eval_traces.json", opts)
 
     rows =
       Enum.map(trace_paths, fn path ->
         trace = load_v4_trace!(path)
         decision = CruciblePolicyPlan.evaluate(trace)
 
+        artifact_paths =
+          persist_crucible_decision_artifacts(
+            :matrix_trace,
+            trace,
+            decision,
+            Keyword.put(opts, :artifact_suffix, Path.basename(path))
+          )
+
         %{
           mode: :trace,
           trace_path: path,
           trace_id: trace.trace_id,
+          model_id: trace.model_id,
+          provider_kind: trace.provider_kind,
           selected_policy: decision.selected_policy,
           selected_action: decision.selected_action,
-          skipped_policies: decision.skipped_policies
+          skipped_policies: decision.skipped_policies,
+          artifact_paths: artifact_paths
         }
       end)
 
@@ -581,55 +625,348 @@ defmodule Trinity.Ops.NativeTasks do
 
     limit = Keyword.get(opts, :limit) || Keyword.get(opts, :max_cases) || 3
     cases = prompt_eval_cases([], limit)
-    out = Keyword.get(opts, :out, "tmp/trinity_crucible/matrix_eval_live.json")
+    artifact_root = v5_artifact_root(opts)
+    out = Keyword.get(opts, :out) || v5_report_path("matrix_eval_live_#{limit}.json", opts)
     id = :"trinity-crucible-matrix-live-#{System.unique_integer([:positive])}"
+
+    run_tag =
+      Keyword.get(opts, :run_tag, "matrix_eval_live_#{System.unique_integer([:positive])}")
+
+    forward_timeout_ms = Keyword.get(opts, :forward_timeout_ms, 240_000)
 
     banner("TRINITY CRUCIBLE MATRIX EVAL LIVE")
     kv("Cases", length(cases))
 
-    {:ok, pid} = CrucibleRuntime.start_child(id: id, live_model?: true)
+    {:ok, pid} = CrucibleRuntime.start_child(crucible_live_runtime_opts(id, opts))
     {:ok, lease} = CrucibleRuntime.lease(pid, owner_ref: "trinity.crucible.matrix_eval")
 
+    try do
+      rows =
+        cases
+        |> Enum.with_index()
+        |> Enum.map(fn {case_spec, index} ->
+          trace_name = "#{run_tag}_#{index}"
+
+          {:ok, trace} =
+            CrucibleRuntime.forward(pid, nil, %{prompt: case_prompt(case_spec)},
+              trace_name: trace_name,
+              timeout: forward_timeout_ms
+            )
+
+          decision = CruciblePolicyPlan.evaluate(trace)
+
+          artifact_paths =
+            persist_crucible_decision_artifacts(
+              :matrix_live,
+              trace,
+              decision,
+              with_trace_artifact_suffix(opts, trace_name)
+            )
+
+          %{
+            id: Map.fetch!(case_spec, "id"),
+            trace_id: trace.trace_id,
+            trace_path: hosted_trace_path(trace_name, artifact_root),
+            model_id: trace.model_id,
+            provider_kind: trace.provider_kind,
+            selected_policy: decision.selected_policy,
+            selected_action: decision.selected_action,
+            hidden_state_available?: Enum.any?(trace.signals, &(&1.signal_type == :hidden_state)),
+            skipped_policies: decision.skipped_policies,
+            artifact_paths: artifact_paths
+          }
+        end)
+
+      stability_report = maybe_run_role_boundary_stability(pid, opts, run_tag)
+
+      report = %{
+        schema: "trinity.crucible.matrix_eval_live.v5",
+        ok: true,
+        mode: :live,
+        model_id: rows |> List.first(%{}) |> Map.get(:model_id),
+        rows: rows,
+        route_margin_histogram: Enum.frequencies_by(rows, & &1.selected_action),
+        hidden_state_availability: %{
+          available: Enum.count(rows, & &1.hidden_state_available?),
+          unavailable: Enum.count(rows, &(not &1.hidden_state_available?))
+        },
+        role_boundary_stability: stability_report
+      }
+
+      File.mkdir_p!(Path.dirname(out))
+      ArtifactIO.write_json!(out, normalize_for_json(report))
+      print_payload(report)
+      pass("TRINITY CRUCIBLE MATRIX EVAL LIVE")
+    after
+      :ok = CrucibleRuntime.release(lease)
+      terminate_live_runtime(pid)
+    end
+  end
+
+  defp expanded_trace_paths!(trace_args) do
+    paths =
+      trace_args
+      |> Enum.flat_map(&expand_trace_arg/1)
+      |> Enum.uniq()
+      |> Enum.sort()
+
+    if paths == [] do
+      Mix.raise("no trace files matched --trace arguments: #{inspect(trace_args)}")
+    end
+
+    paths
+  end
+
+  defp expand_trace_arg(path) when is_binary(path) do
+    cond do
+      File.dir?(path) ->
+        path
+        |> Path.join("**/*.jsonl")
+        |> Path.wildcard()
+        |> Enum.filter(&File.regular?/1)
+
+      wildcard_path?(path) ->
+        path
+        |> Path.wildcard()
+        |> Enum.filter(&File.regular?/1)
+
+      File.regular?(path) ->
+        [path]
+
+      true ->
+        []
+    end
+  end
+
+  defp wildcard_path?(path), do: String.contains?(path, ["*", "?", "["])
+
+  defp with_trace_artifact_suffix(opts, trace_name) do
+    Keyword.put(opts, :artifact_suffix, "#{trace_name}.trace.jsonl")
+  end
+
+  defp persist_crucible_decision_artifacts(mode, trace, decision, opts) do
+    root = v5_artifact_root(opts)
+
+    name =
+      [
+        mode,
+        trace.trace_id || System.unique_integer([:positive]),
+        Keyword.get(opts, :artifact_suffix)
+      ]
+      |> Enum.reject(&is_nil/1)
+      |> Enum.join("_")
+
+    policy_path =
+      Path.join([
+        root,
+        "policy_decisions",
+        "#{safe_artifact_name(name)}.policy_decision.json"
+      ])
+
+    route_path =
+      Path.join([
+        root,
+        "route_decisions",
+        "#{safe_artifact_name(name)}.route_decision.json"
+      ])
+
+    ArtifactIO.write_json!(
+      policy_path,
+      normalize_for_json(policy_decision_payload(trace, decision))
+    )
+
+    ArtifactIO.write_json!(
+      route_path,
+      normalize_for_json(route_decision_payload(trace, decision))
+    )
+
+    %{policy_decision_path: policy_path, route_decision_path: route_path}
+  end
+
+  defp policy_decision_payload(trace, decision) do
+    %{
+      schema: "trinity.crucible.policy_decision.v5",
+      trace_id: trace.trace_id,
+      model_id: trace.model_id,
+      provider_kind: trace.provider_kind,
+      selected_policy: decision.selected_policy,
+      selected_action: decision.selected_action,
+      confidence: decision.confidence,
+      evidence: decision.evidence,
+      skipped_policies: decision.skipped_policies,
+      fallback_path: decision.fallback_path,
+      errors: decision.errors
+    }
+  end
+
+  defp route_decision_payload(trace, decision) do
+    %{
+      schema: "trinity.crucible.route_decision.v5",
+      router_decision_ref: decision.decision_id,
+      trace_ref: trace.trace_id,
+      provider_kind: trace.provider_kind,
+      model_id: trace.model_id,
+      model_family: trace.model_family,
+      backend: trace.backend,
+      assigned_role: decision.selected_action,
+      decision_source: decision.selected_policy,
+      confidence: decision.confidence,
+      target_model: nil,
+      fallback_path: decision.fallback_path,
+      evidence_count: length(decision.evidence),
+      skipped_policies: decision.skipped_policies
+    }
+  end
+
+  defp maybe_run_role_boundary_stability(pid, opts, run_tag) do
+    repeats = Keyword.get(opts, :stability_repeats, 0)
+
+    if is_integer(repeats) and repeats > 0 do
+      run_role_boundary_stability(pid, opts, run_tag, repeats)
+    end
+  end
+
+  defp run_role_boundary_stability(pid, opts, run_tag, repeats) do
+    prompt = Keyword.get(opts, :stability_prompt, Keyword.get(opts, :prompt, "Hi"))
+    artifact_root = v5_artifact_root(opts)
+    timeout = Keyword.get(opts, :forward_timeout_ms, 240_000)
+
     rows =
-      cases
-      |> Enum.with_index()
-      |> Enum.map(fn {case_spec, index} ->
+      Enum.map(1..repeats, fn index ->
+        trace_name = "#{run_tag}_stability_#{index}"
+
         {:ok, trace} =
-          CrucibleRuntime.forward(pid, nil, %{prompt: case_prompt(case_spec)},
-            trace_name: "matrix_eval_live_#{index}"
+          CrucibleRuntime.forward(pid, nil, %{prompt: prompt},
+            trace_name: trace_name,
+            timeout: timeout
           )
 
         decision = CruciblePolicyPlan.evaluate(trace)
 
+        artifact_paths =
+          persist_crucible_decision_artifacts(
+            :role_stability_live,
+            trace,
+            decision,
+            with_trace_artifact_suffix(opts, trace_name)
+          )
+
         %{
-          id: Map.fetch!(case_spec, "id"),
+          index: index,
           trace_id: trace.trace_id,
-          trace_path: "tmp/crucible_v4/matrix_eval_live_#{index}.trace.jsonl",
+          trace_path: hosted_trace_path(trace_name, artifact_root),
           selected_policy: decision.selected_policy,
           selected_action: decision.selected_action,
-          hidden_state_available?: Enum.any?(trace.signals, &(&1.signal_type == :hidden_state)),
-          skipped_policies: decision.skipped_policies
+          artifact_paths: artifact_paths,
+          evidence_summary: policy_evidence_summary(decision)
         }
       end)
 
-    :ok = CrucibleRuntime.release(lease)
-
     report = %{
-      schema: "trinity.crucible.matrix_eval_live.v4",
-      ok: true,
-      mode: :live,
-      rows: rows,
-      route_margin_histogram: Enum.frequencies_by(rows, & &1.selected_action),
-      hidden_state_availability: %{
-        available: Enum.count(rows, & &1.hidden_state_available?),
-        unavailable: Enum.count(rows, &(not &1.hidden_state_available?))
-      }
+      schema: "trinity.crucible.role_boundary_stability.v5",
+      prompt_digest: CrucibleSignalTrace.Digest.prefixed_text(prompt),
+      repeat_count: repeats,
+      selected_action_counts: Enum.frequencies_by(rows, & &1.selected_action),
+      selected_policy_counts: Enum.frequencies_by(rows, & &1.selected_policy),
+      entropy_variance: evidence_variance(rows, :entropy),
+      margin_variance: evidence_variance(rows, :margin),
+      rows: rows
     }
 
-    File.mkdir_p!(Path.dirname(out))
-    ArtifactIO.write_json!(out, normalize_for_json(report))
-    print_payload(report)
-    pass("TRINITY CRUCIBLE MATRIX EVAL LIVE")
+    path = v5_report_path("role_boundary_stability_#{run_tag}.json", opts)
+    ArtifactIO.write_json!(path, normalize_for_json(report))
+    Map.put(report, :report_path, path)
+  end
+
+  defp policy_evidence_summary(decision) do
+    %{
+      evidence_count: length(decision.evidence),
+      entropy: policy_evidence_value(decision.evidence, :entropy_limit),
+      margin: policy_evidence_value(decision.evidence, :margin_floor)
+    }
+  end
+
+  defp policy_evidence_value(evidence, rule) do
+    evidence
+    |> Enum.find_value(fn item ->
+      if Map.get(item, :rule) == rule, do: Map.get(item, :value)
+    end)
+    |> numeric_or_nil()
+  end
+
+  defp numeric_or_nil(value) when is_number(value), do: value
+  defp numeric_or_nil(_value), do: nil
+
+  defp evidence_variance(rows, key) do
+    rows
+    |> Enum.map(&get_in(&1, [:evidence_summary, key]))
+    |> Enum.reject(&is_nil/1)
+    |> sample_variance()
+  end
+
+  defp sample_variance([]), do: nil
+  defp sample_variance([_value]), do: 0.0
+
+  defp sample_variance(values) do
+    mean = Enum.sum(values) / length(values)
+
+    values
+    |> Enum.map(fn value -> :math.pow(value - mean, 2) end)
+    |> Enum.sum()
+    |> Kernel./(length(values) - 1)
+  end
+
+  defp crucible_live_runtime_opts(id, opts) do
+    [
+      id: id,
+      live_model?: true,
+      model_id: Keyword.get(opts, :model_id),
+      tokenizer_id: Keyword.get(opts, :tokenizer_id),
+      backend: Keyword.get(opts, :backend),
+      architecture: normalize_live_architecture(Keyword.get(opts, :architecture)),
+      artifact_root: v5_artifact_root(opts)
+    ]
+    |> Enum.reject(fn {_key, value} -> is_nil(value) end)
+  end
+
+  defp normalize_live_architecture(nil), do: nil
+  defp normalize_live_architecture("base"), do: :base
+
+  defp normalize_live_architecture("for_causal_language_modeling"),
+    do: :for_causal_language_modeling
+
+  defp normalize_live_architecture("for-causal-language-modeling"),
+    do: :for_causal_language_modeling
+
+  defp normalize_live_architecture("for_sequence_classification"),
+    do: :for_sequence_classification
+
+  defp normalize_live_architecture("for-sequence-classification"),
+    do: :for_sequence_classification
+
+  defp normalize_live_architecture(other) do
+    Mix.raise("unsupported --architecture #{inspect(other)}")
+  end
+
+  defp hosted_trace_path(trace_name, artifact_root) do
+    CrucibleArtifacts.trace_path("hosted_#{trace_name}", root: artifact_root)
+  end
+
+  defp terminate_live_runtime(pid) when is_pid(pid) do
+    DynamicSupervisor.terminate_child(SelfHostedInferenceCore.CrucibleRuntimeSupervisor, pid)
+    :ok
+  catch
+    :exit, _reason -> :ok
+  end
+
+  defp v5_report_path(filename, opts) do
+    Path.join([v5_artifact_root(opts), "reports", filename])
+  end
+
+  defp v5_artifact_root(opts) do
+    root = Keyword.get(opts, :artifact_root) || "tmp/crucible_v5"
+
+    CrucibleArtifacts.ensure_layout!(root: root)
   end
 
   defp crucible_v4_payload(mode, trace, decision, trace_path) do

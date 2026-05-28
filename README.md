@@ -390,17 +390,19 @@ arXiv:2512.04695, 2026. <https://arxiv.org/abs/2512.04695>
 
 MIT.
 
-## V4 Status
+## V5 Status
 
-Status: `trinity-live-gate-passing`.
+Status: `trinity-v5-live-replay-matrix-passing`.
 
-The Crucible operator tasks support offline v4 trace replay and native hosted
-runtime live mode:
+The Crucible operator tasks support V5 artifact-backed trace replay, native
+hosted runtime live inspect, live matrix eval, role-boundary stability reports,
+and policy/route decision artifact emission:
 
 ```bash
-mix trinity.crucible.inspect --trace runs/synthetic_python_gpt2_trace.jsonl
-TRINITY_CRUCIBLE_LIVE=true mix trinity.crucible.inspect --live --prompt "Hi"
-TRINITY_CRUCIBLE_LIVE=true mix trinity.crucible.matrix_eval --live --limit 3
+mix trinity.crucible.inspect --trace tmp/crucible_v5/traces/native/model_forward_live.trace.jsonl --artifact-root tmp/crucible_v5
+mix trinity.crucible.matrix_eval --trace tmp/crucible_v5/traces/native --artifact-root tmp/crucible_v5
+TRINITY_CRUCIBLE_LIVE=true mix trinity.crucible.inspect --live --model-id gpt2 --backend binary --artifact-root tmp/crucible_v5 --prompt "Hi"
+TRINITY_CRUCIBLE_LIVE=true mix trinity.crucible.matrix_eval --live --limit 37 --backend binary --artifact-root tmp/crucible_v5
 ```
 
 See [Trinity Live Inspect](guides/trinity_live_inspect.md).

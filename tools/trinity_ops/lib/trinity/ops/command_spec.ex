@@ -210,19 +210,27 @@ defmodule Trinity.Ops.CommandSpec do
   defp crucible_switches do
     [
       artifact_dir: :string,
+      artifact_root: :string,
       runtime_profile: :string,
       message: :string,
       prompt: :string,
       trace: :string,
       live: :boolean,
       out: :string,
-      trace_out: :string
+      trace_out: :string,
+      model_id: :string,
+      tokenizer_id: :string,
+      backend: :string,
+      architecture: :string,
+      trace_name: :string,
+      forward_timeout_ms: :integer
     ]
   end
 
   defp crucible_matrix_switches do
     [
       artifact_dir: :string,
+      artifact_root: :string,
       runtime_profile: :string,
       case: :keep,
       out: :string,
@@ -230,7 +238,15 @@ defmodule Trinity.Ops.CommandSpec do
       live: :boolean,
       limit: :integer,
       no_assert: :boolean,
-      max_cases: :integer
+      max_cases: :integer,
+      model_id: :string,
+      tokenizer_id: :string,
+      backend: :string,
+      architecture: :string,
+      forward_timeout_ms: :integer,
+      run_tag: :string,
+      stability_repeats: :integer,
+      stability_prompt: :string
     ]
   end
 

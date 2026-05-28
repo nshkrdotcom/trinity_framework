@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Expand V5 Trinity Crucible trace replay to files, directories, and globs, with
+  policy decision and route decision artifacts written under `tmp/crucible_v5`.
+- Add V5 live inspect options for real hosted model IDs, backends,
+  architectures, artifact roots, trace names, and forward timeouts.
+- Add V5 live matrix eval artifact output, role-boundary stability reports, and
+  the `--limit 3`, `--limit 10`, and `--limit 37` live evaluation ladder.
+- Add a provider-identity branching audit proving Crucible routing records
+  provider kind without branching policy behavior on provider identity.
 - Add V4 Crucible trace replay and live hosted-runtime modes for
   `mix trinity.crucible.inspect`.
 - Add V4 live matrix smoke support for

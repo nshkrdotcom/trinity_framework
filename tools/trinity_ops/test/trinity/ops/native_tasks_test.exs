@@ -97,6 +97,34 @@ defmodule Trinity.Ops.NativeTasksTest do
     assert trace_events(trace) |> Enum.member?("crucible_forward_trace")
   end
 
+  test "crucible trace matrix expands directories and writes decision artifacts" do
+    root = tmp_path("crucible_v5")
+    trace_dir = tmp_path("trace_dir")
+    nested_dir = Path.join(trace_dir, "native")
+    out = tmp_path("matrix_traces.json")
+    source = Path.expand("../../../../../runs/synthetic_python_gpt2_trace.jsonl", __DIR__)
+    trace_path = Path.join(nested_dir, "synthetic_python_gpt2_trace.jsonl")
+
+    File.mkdir_p!(nested_dir)
+    File.cp!(source, trace_path)
+
+    assert :ok =
+             Tasks.run(:trinity_crucible_matrix_eval, [
+               "--trace",
+               trace_dir,
+               "--artifact-root",
+               root,
+               "--out",
+               out
+             ])
+
+    assert %{"rows" => [row]} = Jason.decode!(File.read!(out))
+    assert row["trace_path"] == trace_path
+    assert row["provider_kind"] == "python_pytorch"
+    assert File.regular?(get_in(row, ["artifact_paths", "policy_decision_path"]))
+    assert File.regular?(get_in(row, ["artifact_paths", "route_decision_path"]))
+  end
+
   test "artifact fetch uses the framework registry pin fetcher" do
     content = ~s({"artifact":"ok"}\n)
     sha256 = :crypto.hash(:sha256, content) |> Base.encode16(case: :lower)
