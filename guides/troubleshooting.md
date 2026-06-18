@@ -58,6 +58,8 @@ Check:
 
 - artifact bundle exists;
 - runtime profile is correct;
+- `mix trinity.eval qwen_router_prompt_eval` without `--runtime-profile
+  cuda_exla` is the mock contract eval and does not load Qwen;
 - snapshot matches the intended profile;
 - route margins are not below profile defaults.
 
@@ -85,4 +87,3 @@ rg -n "/home/home/p/g/n/trinity_coordinator|../trinity_coordinator|test/trinity_
 ```
 
 Hard-coded implementation paths back to the old coordinator are blockers.
-

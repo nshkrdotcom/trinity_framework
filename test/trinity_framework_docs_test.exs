@@ -119,23 +119,26 @@ defmodule TrinityFrameworkDocsTest do
       "trinity_coordinator` is the new source-of-truth",
       "trinity_coordinator` owns new runtime behavior",
       "trinity_coordinator` is the root aggregate",
-      Regex.compile!("deprecated\\s+compatibility\\s+" <> "s" <> "him"),
       "to-be-deprecated monolith hook"
     ]
 
     offenders =
       for forbidden <- forbidden_strings,
-          forbidden_doc_claim?(corpus, forbidden),
+          String.contains?(corpus, forbidden),
           do: forbidden
 
     assert offenders == []
+    refute String.contains?(normalized_whitespace(corpus), "deprecated compatibility shim")
   end
-
-  defp forbidden_doc_claim?(corpus, %Regex{} = forbidden), do: Regex.match?(forbidden, corpus)
-  defp forbidden_doc_claim?(corpus, forbidden), do: String.contains?(corpus, forbidden)
 
   defp docs_corpus do
     @required_docs
     |> Enum.map_join("\n\n", &File.read!/1)
+  end
+
+  defp normalized_whitespace(value) do
+    value
+    |> String.split()
+    |> Enum.join(" ")
   end
 end

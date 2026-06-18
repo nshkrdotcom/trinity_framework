@@ -25,6 +25,15 @@ defmodule Trinity.SingleNode.RuntimeSupervisor do
   alias Trinity.SingleNode.Config
 
   @default_name __MODULE__
+  @qwen_model_id "Qwen/Qwen3-0.6B"
+  @qwen_artifact_repo "nshkrdotcom/trinity-coordinator-adapted-qwen3-0.6b"
+  @qwen_artifact_revision "v1.0.0"
+  @qwen_artifact_manifest_sha256 "2a1476a4d2c7b66633232a564114dfb7ebe46f6bea624fc9ae9123678cafcbb9"
+  @qwen_router_head_shape [10, 1024]
+  @qwen_selected_tensor_count 9
+  @qwen_scale_offset_count 9216
+  @qwen_source_vector_shape [19_456]
+  @mock_model_id "trinity/mock-tiny-route-runtime"
 
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(opts \\ []) do
@@ -302,10 +311,20 @@ defmodule Trinity.SingleNode.RuntimeSupervisor do
   end
 
   defp crucible_runtime_profile(opts) do
+    profile = runtime_profile(opts)
+
     %{
-      name: runtime_profile(opts),
+      name: profile,
       kind: :crucible,
-      model_id: artifact_ref_string(opts),
+      model_id: model_id(profile, opts),
+      artifact_ref: artifact_ref_string(profile, opts),
+      artifact_repo: artifact_repo(profile),
+      artifact_revision: artifact_revision(profile),
+      artifact_manifest_sha256: artifact_manifest_sha256(profile),
+      router_head_shape: route_head_shape(profile),
+      selected_tensor_count: selected_tensor_count(profile),
+      scale_offset_count: scale_offset_count(profile),
+      source_vector_shape: source_vector_shape(profile),
       capabilities: [:route_logits],
       agent_slot_by_role: %{worker: 0, thinker: 1, verifier: 2}
     }
@@ -338,11 +357,15 @@ defmodule Trinity.SingleNode.RuntimeSupervisor do
   end
 
   defp artifact_ref(opts) do
+    artifact_ref(runtime_profile(opts), opts)
+  end
+
+  defp artifact_ref(profile, opts) do
     artifact_root = artifact_root(opts)
 
     %ArtifactRef{
-      artifact_ref: artifact_ref_string(opts),
-      kind: :qwen_sakana_adapted,
+      artifact_ref: artifact_ref_string(profile, opts),
+      kind: artifact_kind(profile),
       uri: artifact_root,
       metadata: %{artifact_dir: artifact_root}
     }
@@ -360,8 +383,38 @@ defmodule Trinity.SingleNode.RuntimeSupervisor do
 
   defp artifact_root(opts), do: Keyword.get(opts, :artifact_root, Config.artifact_root())
 
-  defp artifact_ref_string(opts),
+  defp model_id(:mock_tiny, opts), do: Keyword.get(opts, :model_id, @mock_model_id)
+  defp model_id(_profile, opts), do: Keyword.get(opts, :model_id, @qwen_model_id)
+
+  defp artifact_ref_string(:mock_tiny, opts),
+    do: Keyword.get(opts, :artifact_ref, "artifact:mock-tiny-route-runtime")
+
+  defp artifact_ref_string(_profile, opts),
     do: Keyword.get(opts, :artifact_ref, "artifact:qwen3-0.6b-sakana")
+
+  defp artifact_kind(:mock_tiny), do: :mock_tiny_route_runtime
+  defp artifact_kind(_profile), do: :qwen_sakana_adapted
+
+  defp artifact_repo(:mock_tiny), do: nil
+  defp artifact_repo(_profile), do: @qwen_artifact_repo
+
+  defp artifact_revision(:mock_tiny), do: nil
+  defp artifact_revision(_profile), do: @qwen_artifact_revision
+
+  defp artifact_manifest_sha256(:mock_tiny), do: nil
+  defp artifact_manifest_sha256(_profile), do: @qwen_artifact_manifest_sha256
+
+  defp route_head_shape(:mock_tiny), do: [10, 8]
+  defp route_head_shape(_profile), do: @qwen_router_head_shape
+
+  defp selected_tensor_count(:mock_tiny), do: 0
+  defp selected_tensor_count(_profile), do: @qwen_selected_tensor_count
+
+  defp scale_offset_count(:mock_tiny), do: 0
+  defp scale_offset_count(_profile), do: @qwen_scale_offset_count
+
+  defp source_vector_shape(:mock_tiny), do: []
+  defp source_vector_shape(_profile), do: @qwen_source_vector_shape
 
   defp trace_ref(opts), do: Keyword.get(opts, :trace_ref, "trace:single-node")
 

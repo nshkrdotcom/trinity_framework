@@ -54,6 +54,10 @@ defmodule Trinity.Ops.NativeTasksTest do
 
     report = Jason.decode!(File.read!(out))
     assert report["accepted?"] == true
+    assert get_in(report, ["metadata", "runtime_profile"]) == "mock_tiny"
+    assert get_in(report, ["metadata", "eval_mode"]) == "mock_tiny contract eval"
+    assert get_in(report, ["metadata", "qwen_loaded?"]) == false
+    assert get_in(report, ["metadata", "acceptance_level"]) =~ "does not load Qwen"
     assert get_in(report, ["metrics", "contract_strictness"]) == 1.0
     assert Enum.all?(report["rows"], &(&1["trace_signal_count"] > 0))
   end
@@ -72,7 +76,34 @@ defmodule Trinity.Ops.NativeTasksTest do
                out
              ])
 
-    assert %{"accepted?" => true} = Jason.decode!(File.read!(out))
+    assert %{"accepted?" => true, "metadata" => metadata} = Jason.decode!(File.read!(out))
+    assert metadata["runtime_profile"] == "mock_tiny"
+    assert metadata["eval_mode"] == "mock_tiny contract eval"
+    assert metadata["qwen_loaded?"] == false
+  end
+
+  test "crucible inspect replays a pinned fixture trace without live provider" do
+    trace_path = Path.join(__DIR__, "../../fixtures/crucible_minimal_forward_trace.jsonl")
+    out = tmp_path("crucible_inspect_trace.json")
+    root = tmp_path("crucible_v5")
+
+    assert :ok =
+             Tasks.run(:trinity_crucible_inspect, [
+               "--trace",
+               trace_path,
+               "--artifact-root",
+               root,
+               "--out",
+               out
+             ])
+
+    report = Jason.decode!(File.read!(out))
+    assert report["mode"] == "trace"
+    assert report["model_id"] == "model:fixture"
+    assert report["provider_kind"] == "mock_fixture"
+    assert is_list(report["evidence"])
+    assert File.regular?(get_in(report, ["artifact_paths", "policy_decision_path"]))
+    assert File.regular?(get_in(report, ["artifact_paths", "route_decision_path"]))
   end
 
   test "crucible inspect writes a report and trace" do

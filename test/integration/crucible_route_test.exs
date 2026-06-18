@@ -54,12 +54,27 @@ defmodule TrinityFramework.Integration.CrucibleRouteTest do
                coordination_run_ref: "run:crucible-jsonl"
              )
 
-    events =
+    records =
       trace_path
       |> File.read!()
       |> String.split("\n", trim: true)
       |> Enum.map(&Jason.decode!/1)
-      |> Enum.map(&Map.fetch!(&1, "event"))
+
+    events = Enum.map(records, &Map.fetch!(&1, "event"))
+    forward_trace = Enum.find(records, &(&1["event"] == "crucible_forward_trace"))
+
+    assert forward_trace["model_id"] == "trinity/mock-tiny-route-runtime"
+    assert get_in(forward_trace, ["metadata", "backend_label"]) == "mock_tiny"
+    assert get_in(forward_trace, ["metadata", "runtime_profile"]) == "mock_tiny"
+
+    assert get_in(forward_trace, ["metadata", "artifact_ref"]) ==
+             "artifact:mock-tiny-route-runtime"
+
+    assert get_in(forward_trace, ["metadata", "selected_agent_id"]) ==
+             result.decision.selected_agent_id
+
+    assert get_in(forward_trace, ["metadata", "selected_role_id"]) ==
+             result.decision.selected_role_id
 
     assert "crucible_forward_trace" in events
     assert "crucible_signal_record" in events

@@ -196,8 +196,20 @@ defmodule Trinity.Crucible.DecisionAdapter do
   defp safe_ref(value) do
     value
     |> to_string()
-    |> String.replace(~r/[^A-Za-z0-9_.:-]/, "_")
+    |> String.graphemes()
+    |> Enum.map_join(fn char ->
+      if safe_ref_char?(char), do: char, else: "_"
+    end)
   end
+
+  defp safe_ref_char?(<<char::utf8>>) do
+    ascii_letter?(char) or ascii_digit?(char) or char in [45, 46, 58, 95]
+  end
+
+  defp safe_ref_char?(_char), do: false
+
+  defp ascii_letter?(char), do: char in ?A..?Z or char in ?a..?z
+  defp ascii_digit?(char), do: char in ?0..?9
 
   defp attrs_map(attrs) when is_list(attrs), do: Map.new(attrs)
   defp attrs_map(attrs) when is_map(attrs), do: attrs

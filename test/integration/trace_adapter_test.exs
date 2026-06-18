@@ -22,6 +22,49 @@ defmodule TrinityFramework.Integration.TraceAdapterTest do
              CrucibleSignalTrace.LayerTrajectory.cosine_drifts(trace.layer_trajectory)
   end
 
+  test "TraceAdapter keeps Qwen artifact identity separate from backend identity" do
+    logits = %{
+      logits_fixture()
+      | backend_label: "EXLA.Backend<cuda:0>",
+        runtime_profile: :cuda_exla
+    }
+
+    runtime_profile = %{
+      name: :cuda_exla,
+      model_id: "Qwen/Qwen3-0.6B",
+      artifact_ref: "artifact:qwen3-0.6b-sakana",
+      artifact_repo: "nshkrdotcom/trinity-coordinator-adapted-qwen3-0.6b",
+      artifact_revision: "v1.0.0",
+      artifact_manifest_sha256: String.duplicate("a", 64),
+      router_head_shape: [10, 1024],
+      selected_tensor_count: 9,
+      scale_offset_count: 9216,
+      source_vector_shape: [19_456]
+    }
+
+    context =
+      RequestContext.from_messages([%{"role" => "user", "content" => "Route with CUDA."}],
+        runtime_profile: runtime_profile
+      )
+
+    {:ok, tap_plan} = TapPlanBuilder.build(context, runtime_profile)
+
+    trace = TraceAdapter.from_logits(logits, context, tap_plan, trace_id: "trace:qwen")
+
+    assert trace.model_id == "Qwen/Qwen3-0.6B"
+    assert Atom.to_string(trace.backend) == "EXLA.Backend<cuda:0>"
+    assert trace.metadata.model_id == "Qwen/Qwen3-0.6B"
+    assert trace.metadata.backend_label == "EXLA.Backend<cuda:0>"
+    assert trace.metadata.runtime_profile == "cuda_exla"
+    assert trace.metadata.artifact_ref == "artifact:qwen3-0.6b-sakana"
+    assert trace.metadata.artifact_repo == "nshkrdotcom/trinity-coordinator-adapted-qwen3-0.6b"
+    assert trace.metadata.router_head_shape == [10, 1024]
+    assert trace.metadata.selected_tensor_count == 9
+    assert trace.metadata.scale_offset_count == 9216
+    assert trace.metadata.source_vector_shape == [19_456]
+    assert trace.final_logits.metadata.artifact_ref == "artifact:qwen3-0.6b-sakana"
+  end
+
   test "DecisionAdapter maps Crucible policy decisions to deterministic Trinity route decisions" do
     crucible =
       CrucibleRouteDecision.new!(

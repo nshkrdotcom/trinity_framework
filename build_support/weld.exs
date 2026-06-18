@@ -23,7 +23,6 @@ defmodule TrinityFramework.Build.WeldContract do
     :execution_plane_process,
     :inference,
     :outer_brain_context_abi,
-    :mezzanine_ai_execution_engine,
     :aitrace
   ]
 

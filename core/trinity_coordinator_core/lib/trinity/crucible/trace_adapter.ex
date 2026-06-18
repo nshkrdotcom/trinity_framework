@@ -22,7 +22,8 @@ defmodule Trinity.Crucible.TraceAdapter do
     model_id = Keyword.get(opts, :model_id) || model_id(logits, context)
     run_id = Keyword.get(opts, :run_id) || context.coordination_run_ref
     values = logits_values(logits)
-    final_record = final_logits_record(trace_id, run_id, model_id, values, logits)
+    metadata = trace_metadata(context, logits, model_id)
+    final_record = final_logits_record(trace_id, run_id, model_id, values, logits, metadata)
     trajectory = trajectory_from_plan(tap_plan, logits)
 
     ForwardTrace.new!(
@@ -31,21 +32,14 @@ defmodule Trinity.Crucible.TraceAdapter do
       provider_kind: :trinity_route_logits,
       model_id: model_id,
       model_family: :route_logits,
-      backend: logits.backend_label || logits.runtime_profile,
+      backend: backend_label(logits),
       input_hash: logits.transcript_hash || hash(context.messages),
       tap_plan_ref: tap_plan && tap_plan.plan_id,
       signals: [final_record],
       layer_trajectory: trajectory,
       final_logits: final_record,
       policy_decision_refs: [],
-      metadata: %{
-        task_type: context.task_type,
-        runtime_profile: logits.runtime_profile,
-        runtime_kind: :route_logits_adapter,
-        logit_margin: margin(logits),
-        token_count: logits.token_count,
-        route_hash_inputs: logits.route_hash_inputs
-      }
+      metadata: metadata
     )
   end
 
@@ -143,7 +137,14 @@ defmodule Trinity.Crucible.TraceAdapter do
     )
   end
 
-  defp final_logits_record(trace_id, run_id, model_id, values, %RouteLogits{} = logits) do
+  defp final_logits_record(
+         trace_id,
+         run_id,
+         model_id,
+         values,
+         %RouteLogits{} = logits,
+         metadata
+       ) do
     summary = TensorSummary.compute(values, entropy: true, top_k: 4)
 
     SignalRecord.new!(
@@ -154,7 +155,7 @@ defmodule Trinity.Crucible.TraceAdapter do
       provider_kind: :trinity_route_logits,
       model_id: model_id,
       model_family: :route_logits,
-      backend: logits.backend_label || logits.runtime_profile,
+      backend: backend_label(logits),
       dtype: summary.dtype,
       shape: summary.shape,
       rank: summary.rank,
@@ -163,7 +164,7 @@ defmodule Trinity.Crucible.TraceAdapter do
       capture_method: :route_logits_projection,
       capability_status: :captured,
       tensor_summary: summary,
-      metadata: %{source: :trinity_route_logits}
+      metadata: signal_metadata(metadata)
     )
   end
 
@@ -235,14 +236,95 @@ defmodule Trinity.Crucible.TraceAdapter do
   defp numeric_list(_values), do: []
 
   defp model_id(%RouteLogits{} = logits, %RequestContext{} = context) do
+    profile = runtime_profile_map(context)
+
     cond do
-      is_binary(logits.backend_label) -> logits.backend_label
-      is_atom(logits.backend_label) -> Atom.to_string(logits.backend_label)
+      is_binary(field(profile, :model_id)) -> field(profile, :model_id)
       is_atom(context.runtime_profile) -> Atom.to_string(context.runtime_profile)
       is_binary(context.runtime_profile) -> context.runtime_profile
+      is_atom(logits.runtime_profile) -> Atom.to_string(logits.runtime_profile)
+      is_binary(logits.runtime_profile) -> logits.runtime_profile
       true -> "trinity-route-runtime"
     end
   end
+
+  defp trace_metadata(%RequestContext{} = context, %RouteLogits{} = logits, model_id) do
+    profile = runtime_profile_map(context)
+
+    %{
+      task_type: context.task_type,
+      model_id: model_id,
+      backend_label: backend_label(logits),
+      runtime_profile: runtime_profile_name(context, logits),
+      runtime_kind: :route_logits_adapter,
+      artifact_ref: field(profile, :artifact_ref),
+      artifact_repo: field(profile, :artifact_repo),
+      artifact_revision: field(profile, :artifact_revision),
+      artifact_manifest_sha256: field(profile, :artifact_manifest_sha256),
+      router_head_shape: field(profile, :router_head_shape),
+      selected_tensor_count: field(profile, :selected_tensor_count),
+      scale_offset_count: field(profile, :scale_offset_count),
+      source_vector_shape: field(profile, :source_vector_shape),
+      transcript_hash: logits.transcript_hash || hash(context.messages),
+      selected_agent_id: logits.selected_agent_id,
+      selected_role_id: logits.selected_role_id,
+      logit_margin: margin(logits),
+      token_count: logits.token_count,
+      route_hash_inputs: logits.route_hash_inputs
+    }
+  end
+
+  defp signal_metadata(metadata) do
+    metadata
+    |> Map.take([
+      :model_id,
+      :backend_label,
+      :runtime_profile,
+      :artifact_ref,
+      :artifact_repo,
+      :artifact_revision,
+      :artifact_manifest_sha256,
+      :router_head_shape,
+      :selected_tensor_count,
+      :scale_offset_count,
+      :source_vector_shape
+    ])
+    |> Map.put(:source, :trinity_route_logits)
+  end
+
+  defp runtime_profile_map(%RequestContext{runtime_profile: profile}) when is_map(profile),
+    do: profile
+
+  defp runtime_profile_map(_context), do: %{}
+
+  defp runtime_profile_name(%RequestContext{} = context, %RouteLogits{} = logits) do
+    profile = runtime_profile_map(context)
+
+    cond do
+      is_atom(field(profile, :name)) -> Atom.to_string(field(profile, :name))
+      is_binary(field(profile, :name)) -> field(profile, :name)
+      is_atom(logits.runtime_profile) -> Atom.to_string(logits.runtime_profile)
+      is_binary(logits.runtime_profile) -> logits.runtime_profile
+      is_atom(context.runtime_profile) -> Atom.to_string(context.runtime_profile)
+      is_binary(context.runtime_profile) -> context.runtime_profile
+      true -> nil
+    end
+  end
+
+  defp backend_label(%RouteLogits{} = logits) do
+    cond do
+      is_atom(logits.backend_label) -> Atom.to_string(logits.backend_label)
+      is_binary(logits.backend_label) -> logits.backend_label
+      is_atom(logits.runtime_profile) -> Atom.to_string(logits.runtime_profile)
+      is_binary(logits.runtime_profile) -> logits.runtime_profile
+      true -> nil
+    end
+  end
+
+  defp field(map, field), do: field(map, field, nil)
+
+  defp field(map, field, default) when is_map(map),
+    do: Map.get(map, field, Map.get(map, Atom.to_string(field), default))
 
   defp margin(%RouteLogits{margins: margins}) when is_map(margins) do
     margins

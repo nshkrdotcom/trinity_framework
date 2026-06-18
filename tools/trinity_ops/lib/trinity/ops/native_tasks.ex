@@ -247,14 +247,32 @@ defmodule Trinity.Ops.NativeTasks do
 
   defp safe_artifact_name(name) do
     name
+    |> to_string()
     |> String.trim()
-    |> String.replace(~r/[^A-Za-z0-9_.-]+/, "_")
+    |> sanitize_ref_fragment(&artifact_name_char?/1)
     |> String.trim("_")
     |> case do
       "" -> "command"
       safe -> safe
     end
   end
+
+  defp artifact_name_char?(<<char::utf8>>) do
+    ascii_letter?(char) or ascii_digit?(char) or char in [45, 46, 95]
+  end
+
+  defp artifact_name_char?(_char), do: false
+
+  defp sanitize_ref_fragment(value, allowed?) do
+    value
+    |> String.graphemes()
+    |> Enum.map_join(fn char ->
+      if allowed?.(char), do: char, else: "_"
+    end)
+  end
+
+  defp ascii_letter?(char), do: char in ?A..?Z or char in ?a..?z
+  defp ascii_digit?(char), do: char in ?0..?9
 
   defp route_demo(opts) do
     start_app!()
@@ -450,9 +468,14 @@ defmodule Trinity.Ops.NativeTasks do
     max_cases = Keyword.get(opts, :max_cases)
     cases = prompt_eval_cases(selected_ids, max_cases)
     out = Keyword.get(opts, :out, "tmp/trinity_crucible/matrix_eval.json")
+    metadata = matrix_eval_metadata(runtime_profile)
 
     banner("TRINITY CRUCIBLE MATRIX EVAL")
     kv("Runtime profile", runtime_profile)
+    kv("Eval mode", metadata.eval_mode)
+    kv("Qwen runtime", if(metadata.qwen_loaded?, do: "loaded", else: "not loaded"))
+    kv("Acceptance level", metadata.acceptance_level)
+    kv("Snapshot policy", metadata.snapshot_policy)
     kv("Cases", length(cases))
 
     {:ok, runtime} =
@@ -498,7 +521,7 @@ defmodule Trinity.Ops.NativeTasks do
         }
       end)
 
-    report = crucible_matrix_report(rows)
+    report = crucible_matrix_report(rows, metadata)
     File.mkdir_p!(Path.dirname(out))
     ArtifactIO.write_json!(out, normalize_for_json(report))
 
@@ -553,7 +576,7 @@ defmodule Trinity.Ops.NativeTasks do
     pass("TRINITY CRUCIBLE MATRIX EVAL TRACE")
   end
 
-  defp crucible_matrix_report(rows) do
+  defp crucible_matrix_report(rows, metadata) do
     total = length(rows)
     expected_role_matches = Enum.count(rows, & &1.expected_role_matched?)
     strict_rows = Enum.count(rows, &strict_crucible_matrix_row?/1)
@@ -572,6 +595,7 @@ defmodule Trinity.Ops.NativeTasks do
 
     %{
       schema: "trinity.crucible.matrix_eval.v1",
+      metadata: metadata,
       rows: rows,
       metrics: metrics,
       criteria: criteria,
@@ -582,9 +606,15 @@ defmodule Trinity.Ops.NativeTasks do
   defp format_crucible_matrix_report(report) do
     metrics = Map.fetch!(report, :metrics)
     criteria = Map.fetch!(report, :criteria)
+    metadata = Map.fetch!(report, :metadata)
 
     """
     TRINITY Crucible Matrix Eval
+      runtime profile: #{metadata.runtime_profile}
+      eval mode: #{metadata.eval_mode}
+      Qwen runtime loaded: #{metadata.qwen_loaded?}
+      acceptance level: #{metadata.acceptance_level}
+      snapshot policy: #{metadata.snapshot_policy}
       cases: #{metrics.total}
       expected role matches: #{metrics.expected_role_matches}
       expected role match rate: #{pct(metrics.expected_role_match_rate)}
@@ -608,6 +638,33 @@ defmodule Trinity.Ops.NativeTasks do
       is_integer(row.trace_signal_count) and row.trace_signal_count > 0 and
       is_binary(row.final_logits_signal_id)
   end
+
+  defp matrix_eval_metadata(runtime_profile) do
+    qwen_loaded? = runtime_profile != :mock_tiny
+
+    %{
+      runtime_profile: Atom.to_string(runtime_profile),
+      eval_mode: matrix_eval_mode(runtime_profile),
+      qwen_loaded?: qwen_loaded?,
+      acceptance_level: matrix_acceptance_level(runtime_profile),
+      snapshot_policy: matrix_snapshot_policy(runtime_profile)
+    }
+  end
+
+  defp matrix_eval_mode(:mock_tiny), do: "mock_tiny contract eval"
+  defp matrix_eval_mode(:cuda_exla), do: "CUDA Qwen route eval"
+  defp matrix_eval_mode(_runtime_profile), do: "Qwen route runtime eval"
+
+  defp matrix_acceptance_level(:mock_tiny), do: "Contract-path eval only; does not load Qwen"
+
+  defp matrix_acceptance_level(_runtime_profile),
+    do: "Route, margin, determinism, and Crucible contract acceptance"
+
+  defp matrix_snapshot_policy(:mock_tiny),
+    do: "No Qwen logits snapshot is used for mock_tiny"
+
+  defp matrix_snapshot_policy(_runtime_profile),
+    do: "Strict Qwen snapshot acceptance belongs to the direct example eval fixture"
 
   defp crucible_matrix_eval_live(opts) do
     require_crucible_live!()

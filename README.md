@@ -46,18 +46,6 @@ This repo is also the integration point for the nshkr stack. It must be able to
 run standalone and sit inside larger product, governance, execution, and testing
 flows through explicit package contracts and governed provider boundaries.
 
-## Mezzanine Router Adapter
-
-`Trinity.MezzanineRouterAdapter` in `core/trinity_coordinator_core` implements
-`Mezzanine.AIExecution.RouterAdapter` for the NSHKR router fabric. It returns
-route decision refs and bounded route receipts to Mezzanine; it does not
-execute models, grant authority, or mutate product projections.
-
-The adapter maps abstract model class refs to concrete model profile refs
-through an explicit class-profile policy map. A route request that names a
-model class without an allowed profile mapping fails closed with a bounded
-route failure code instead of reusing the class ref as a runtime profile.
-
 ## Quickstart
 
 ```bash
@@ -190,15 +178,28 @@ XLA_TARGET=cuda12 mix run lib/qwen_router_prompt_eval.exs -- \
 The eval asserts route decisions, margins, stable transcript fields, and
 determinism.
 
-The root eval wrapper runs the Crucible route-decision path:
+The root eval wrapper runs the Crucible route-decision path. With no profile it
+defaults to the mock contract lane:
 
 ```bash
 mix trinity.eval qwen_router_prompt_eval
 ```
 
-The Crucible path evaluates route-decision contract strictness, expected-role
-diagnostics, confidence bands, trajectory margins, and trace-derived evidence
-over the 37-case route suite. It does not compare generated text.
+That command prints `Runtime profile: mock_tiny`, `Qwen runtime: not loaded`,
+and `Contract-path eval only`. It proves the Crucible contract path, not the
+adapted Qwen router.
+
+Use the CUDA profile when the wrapper should load the self-hosted Qwen/Sakana
+route runtime:
+
+```bash
+XLA_TARGET=cuda12 mix trinity.eval qwen_router_prompt_eval \
+  --runtime-profile cuda_exla
+```
+
+The strict snapshot fixture remains owned by the direct example eval command.
+Treat the wrapper report as route/contract acceptance, and the direct example
+snapshot as a separate, provenance-sensitive logits fixture gate.
 
 ## Generate Safetensors
 

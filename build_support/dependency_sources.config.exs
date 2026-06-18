@@ -123,17 +123,6 @@
       hex: "~> 0.1.0",
       default_order: [:path, :github, :hex],
       publish_order: [:hex]
-    },
-    mezzanine_ai_execution_engine: %{
-      path: "../mezzanine/core/ai_execution_engine",
-      github: %{
-        repo: "nshkrdotcom/mezzanine",
-        branch: "main",
-        subdir: "core/ai_execution_engine"
-      },
-      hex: "~> 0.1.0",
-      default_order: [:path, :github, :hex],
-      publish_order: [:hex]
     }
   }
 }

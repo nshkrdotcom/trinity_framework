@@ -70,8 +70,37 @@ mix trinity.eval qwen_router_prompt_eval
 mix trinity.crucible.matrix_eval --runtime-profile mock_tiny
 ```
 
-`mix trinity.eval qwen_router_prompt_eval` uses the Crucible route path and
-prints the same strict route-decision acceptance criteria as
-`mix trinity.crucible.matrix_eval`. The report covers route decisions,
-confidence bands, trajectory margins, safety expectations, expected-role
-diagnostics, and contract strictness; it does not compare generated text.
+With no explicit profile these commands use `mock_tiny`. A passing mock report
+means:
+
+```text
+Runtime profile: mock_tiny
+Qwen runtime: not loaded
+Contract-path eval only
+```
+
+That is useful for contract strictness and trace/evidence plumbing, but it is
+not adapted-Qwen proof.
+
+Run the wrapper against the Qwen/Sakana route runtime with:
+
+```bash
+XLA_TARGET=cuda12 mix trinity.eval qwen_router_prompt_eval \
+  --runtime-profile cuda_exla
+```
+
+The wrapper report covers route decisions, confidence bands, trajectory
+margins, expected-role diagnostics, trace-derived evidence, and contract
+strictness. It does not compare generated text.
+
+Keep two acceptance levels separate:
+
+- Route/margin/determinism acceptance belongs to the runtime eval path.
+- Strict logits snapshot acceptance belongs to the direct example fixture:
+
+```bash
+cd examples/qwen_router_prompt_eval
+XLA_TARGET=cuda12 mix run lib/qwen_router_prompt_eval.exs -- \
+  --snapshot fixtures/qwen_router_prompt_eval_logits.json \
+  --determinism-runs 2
+```

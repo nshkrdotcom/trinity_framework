@@ -1,31 +1,29 @@
 # Router Fabric Integration
 
-TRINITY owns reusable route planning and coordination behavior. In the NSHKR
-stack it plugs into Mezzanine through a concrete adapter rather than making
-Mezzanine depend on TRINITY internals.
+TRINITY owns reusable route planning and coordination behavior. Product
+systems should bind to it through explicit framework contracts instead of
+placing product adapters in this repo.
 
-## Mezzanine Adapter
+## Framework Contract
 
-`Trinity.MezzanineRouterAdapter` lives in
-`core/trinity_coordinator_core` and implements
-`Mezzanine.AIExecution.RouterAdapter`.
+The supported integration points are:
 
-The adapter accepts Mezzanine route requests and returns route decision refs,
-route plan refs, candidate model class refs, trace refs, and bounded failure
-reason codes. It does not execute model calls, admit workflows, grant
-authority, or project product state.
+- `Trinity.Router.route/2` for pure coordinator contract routing.
+- `Trinity.SingleNode.route/2` for route-logits runtime routing.
+- `Trinity.SingleNode.dispatch/3` for governed provider dispatch after a route.
+- `Trinity.Coordinator.RouteDecision` and `TraceEvent` for downstream receipts.
 
-Model classes and model profiles are distinct. The adapter resolves
-`model_class_ref` values through `model_class_profile_map` supplied by the
-request, adapter options, or deterministic defaults. The selected output is a
-`model-profile://...` ref; unmapped classes are rejected with
-`trinity.route.model_class_unmapped.v1`.
+Downstream applications that need a product-specific adapter should keep that
+adapter in their own package or in a dedicated bridge repo. The adapter can map
+its local route request into TRINITY messages/options, call one of the
+framework entry points above, and translate the returned route decision into
+the product receipt shape.
 
 ## Standalone And Stack Modes
 
 Standalone TRINITY commands continue to use the local runtime profiles and
-operator tasks described in the root README. Stack mode binds through
-Mezzanine's adapter contract and is proven by StackLab router fabric canaries.
+operator tasks described in the root README. Stack mode is a consumer concern:
+it should depend on the public framework contracts, not on framework internals.
 
 ## Local QC
 

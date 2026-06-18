@@ -78,7 +78,7 @@ defmodule Trinity.SingleNode.TraceParityTest do
     }
 
     assert Hash.term(route_hash_inputs) ==
-             "7cb45f594d2dc0003569ed0cedddc377d154b3ebfeca16d85988862c117342ea"
+             "36b53557d009c6ce42a9b3af150f05db0c5a97bb3a9593ca23e3f2719921d49a"
   end
 
   defp fixture_cases do

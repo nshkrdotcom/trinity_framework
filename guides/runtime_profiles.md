@@ -19,6 +19,7 @@ mix trinity.route.demo --mock-provider --runtime-profile mock_tiny --max-turns 1
 mix trinity.hitl.mock_loop --runtime-profile mock_tiny --max-turns 1
 mix trinity.hitl.adapted --runtime-profile cuda_exla
 mix trinity.crucible.matrix_eval --runtime-profile mock_tiny
+XLA_TARGET=cuda12 mix trinity.eval qwen_router_prompt_eval --runtime-profile cuda_exla
 ```
 
 Eval profile:
