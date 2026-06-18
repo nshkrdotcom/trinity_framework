@@ -22,18 +22,9 @@ defmodule Trinity.SingleNode.RuntimeSupervisor do
   }
 
   alias Trinity.Crucible.{DecisionAdapter, RequestContext, TapPlanBuilder, TraceAdapter}
-  alias Trinity.SingleNode.Config
+  alias Trinity.SingleNode.{ArtifactIdentity, Config}
 
   @default_name __MODULE__
-  @qwen_model_id "Qwen/Qwen3-0.6B"
-  @qwen_artifact_repo "nshkrdotcom/trinity-coordinator-adapted-qwen3-0.6b"
-  @qwen_artifact_revision "v1.0.0"
-  @qwen_artifact_manifest_sha256 "2a1476a4d2c7b66633232a564114dfb7ebe46f6bea624fc9ae9123678cafcbb9"
-  @qwen_router_head_shape [10, 1024]
-  @qwen_selected_tensor_count 9
-  @qwen_scale_offset_count 9216
-  @qwen_source_vector_shape [19_456]
-  @mock_model_id "trinity/mock-tiny-route-runtime"
 
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(opts \\ []) do
@@ -129,21 +120,23 @@ defmodule Trinity.SingleNode.RuntimeSupervisor do
   @spec extraction_plan([map()], keyword()) :: HiddenStateExtractionPlan.t()
   def extraction_plan(messages, opts \\ []) when is_list(messages) do
     profile = runtime_profile(opts)
+    identity = artifact_identity(profile, opts)
 
     %HiddenStateExtractionPlan{
-      adapter_ref: adapter_ref(profile, opts),
+      adapter_ref: adapter_ref(profile, identity, opts),
       artifact_ref: artifact_ref(opts),
-      runtime_profile_ref: runtime_profile_ref(profile),
+      runtime_profile_ref: runtime_profile_ref(profile, identity),
       messages: messages,
       options: %{
         backend_options: Keyword.get(opts, :backend_options, %{}),
-        route_head: route_head_spec(profile, opts),
+        route_head: route_head_spec(profile, identity, opts),
         route_options: Keyword.get(opts, :route_options, []),
         runtime_options: Keyword.get(opts, :runtime_options, []),
         runtime_profile: profile
       },
       metadata: %{
         artifact_root: artifact_root(opts),
+        artifact_identity: identity,
         runtime_profile: profile
       }
     }
@@ -259,7 +252,7 @@ defmodule Trinity.SingleNode.RuntimeSupervisor do
       backend_options: Keyword.get(opts, :backend_options, %{}),
       load_adapter?: Keyword.get(opts, :load_adapter?, true),
       register_backend?: Keyword.get(opts, :register_backend?, true),
-      route_head: route_head_spec(runtime_profile(opts), opts),
+      route_head: route_head_spec(runtime_profile(opts), artifact_identity(opts), opts),
       runtime_profile: runtime_profile(opts),
       runtime_options: Keyword.get(opts, :runtime_options, []),
       startup_kind: Keyword.get(opts, :startup_kind, :attach_existing_service)
@@ -299,32 +292,38 @@ defmodule Trinity.SingleNode.RuntimeSupervisor do
     |> Config.normalize_runtime_profile!()
   end
 
-  defp runtime_profile_ref(profile) do
+  defp runtime_profile_ref(profile, identity) do
     %RuntimeProfileRef{
       name: profile,
       kind: :route_logits,
       require_cuda?: profile == :cuda_exla,
-      qwen_runtime?: profile != :mock_tiny,
-      artifact_runtime?: profile != :mock_tiny,
-      capabilities: %{route_logits?: true}
+      qwen_runtime?: identity.qwen_loaded?,
+      artifact_runtime?: identity.artifact_runtime?,
+      capabilities: %{route_logits?: true},
+      metadata: %{artifact_identity: identity}
     }
   end
 
   defp crucible_runtime_profile(opts) do
     profile = runtime_profile(opts)
+    identity = artifact_identity(profile, opts)
 
     %{
       name: profile,
       kind: :crucible,
-      model_id: model_id(profile, opts),
-      artifact_ref: artifact_ref_string(profile, opts),
-      artifact_repo: artifact_repo(profile),
-      artifact_revision: artifact_revision(profile),
-      artifact_manifest_sha256: artifact_manifest_sha256(profile),
-      router_head_shape: route_head_shape(profile),
-      selected_tensor_count: selected_tensor_count(profile),
-      scale_offset_count: scale_offset_count(profile),
-      source_vector_shape: source_vector_shape(profile),
+      adapter_id: identity.adapter_id,
+      model_id: identity.model_id,
+      artifact_ref: identity.artifact_ref,
+      artifact_repo: identity.artifact_repo,
+      artifact_revision: identity.artifact_revision,
+      artifact_manifest_sha256: identity.artifact_manifest_sha256,
+      artifact_root: identity.artifact_root,
+      artifact_status: identity.artifact_status,
+      qwen_loaded?: identity.qwen_loaded?,
+      router_head_shape: identity.router_head_shape,
+      selected_tensor_count: identity.selected_tensor_count,
+      scale_offset_count: identity.scale_offset_count,
+      source_vector_shape: identity.source_vector_shape,
       capabilities: [:route_logits],
       agent_slot_by_role: %{worker: 0, thinker: 1, verifier: 2}
     }
@@ -342,15 +341,15 @@ defmodule Trinity.SingleNode.RuntimeSupervisor do
     )
   end
 
-  defp adapter_ref(:mock_tiny, opts) do
+  defp adapter_ref(:mock_tiny, _identity, opts) do
     Keyword.get(opts, :adapter_ref) ||
       AdapterRef.new!(id: :mock_tiny, version: "0.1.0", contract: :route_logits_v1)
   end
 
-  defp adapter_ref(_profile, opts) do
+  defp adapter_ref(_profile, identity, opts) do
     Keyword.get(opts, :adapter_ref) ||
       AdapterRef.new!(
-        id: :trinity_qwen3_0_6b_sakana,
+        id: identity.adapter_id || :trinity_route_runtime,
         version: "0.1.0",
         contract: :route_logits_v1
       )
@@ -362,59 +361,44 @@ defmodule Trinity.SingleNode.RuntimeSupervisor do
 
   defp artifact_ref(profile, opts) do
     artifact_root = artifact_root(opts)
+    identity = artifact_identity(profile, opts)
 
     %ArtifactRef{
-      artifact_ref: artifact_ref_string(profile, opts),
-      kind: artifact_kind(profile),
+      artifact_ref: identity.artifact_ref,
+      kind: artifact_kind(profile, identity),
       uri: artifact_root,
-      metadata: %{artifact_dir: artifact_root}
+      metadata: %{artifact_dir: artifact_root, artifact_identity: identity}
     }
   end
 
-  defp route_head_spec(:mock_tiny, opts) do
+  defp route_head_spec(:mock_tiny, _identity, opts) do
     Keyword.get(opts, :route_head) ||
       %RouteHeadSpec{input_dim: 8, num_agents: 7, num_roles: 3, output_dim: 10}
   end
 
-  defp route_head_spec(_profile, opts) do
+  defp route_head_spec(_profile, identity, opts) do
+    [output_dim, input_dim] = route_head_shape(identity)
+
     Keyword.get(opts, :route_head) ||
-      %RouteHeadSpec{input_dim: 1024, num_agents: 7, num_roles: 3, output_dim: 10}
+      %RouteHeadSpec{input_dim: input_dim, num_agents: 7, num_roles: 3, output_dim: output_dim}
   end
 
   defp artifact_root(opts), do: Keyword.get(opts, :artifact_root, Config.artifact_root())
 
-  defp model_id(:mock_tiny, opts), do: Keyword.get(opts, :model_id, @mock_model_id)
-  defp model_id(_profile, opts), do: Keyword.get(opts, :model_id, @qwen_model_id)
+  defp artifact_identity(opts), do: artifact_identity(runtime_profile(opts), opts)
 
-  defp artifact_ref_string(:mock_tiny, opts),
-    do: Keyword.get(opts, :artifact_ref, "artifact:mock-tiny-route-runtime")
+  defp artifact_identity(profile, opts),
+    do: ArtifactIdentity.resolve(profile, artifact_root(opts), opts)
 
-  defp artifact_ref_string(_profile, opts),
-    do: Keyword.get(opts, :artifact_ref, "artifact:qwen3-0.6b-sakana")
+  defp artifact_kind(:mock_tiny, _identity), do: :mock_tiny_route_runtime
+  defp artifact_kind(_profile, %{qwen_loaded?: true}), do: :qwen_sakana_adapted
+  defp artifact_kind(_profile, _identity), do: :custom_route_runtime
 
-  defp artifact_kind(:mock_tiny), do: :mock_tiny_route_runtime
-  defp artifact_kind(_profile), do: :qwen_sakana_adapted
+  defp route_head_shape(%{router_head_shape: [output_dim, input_dim]})
+       when is_integer(output_dim) and is_integer(input_dim),
+       do: [output_dim, input_dim]
 
-  defp artifact_repo(:mock_tiny), do: nil
-  defp artifact_repo(_profile), do: @qwen_artifact_repo
-
-  defp artifact_revision(:mock_tiny), do: nil
-  defp artifact_revision(_profile), do: @qwen_artifact_revision
-
-  defp artifact_manifest_sha256(:mock_tiny), do: nil
-  defp artifact_manifest_sha256(_profile), do: @qwen_artifact_manifest_sha256
-
-  defp route_head_shape(:mock_tiny), do: [10, 8]
-  defp route_head_shape(_profile), do: @qwen_router_head_shape
-
-  defp selected_tensor_count(:mock_tiny), do: 0
-  defp selected_tensor_count(_profile), do: @qwen_selected_tensor_count
-
-  defp scale_offset_count(:mock_tiny), do: 0
-  defp scale_offset_count(_profile), do: @qwen_scale_offset_count
-
-  defp source_vector_shape(:mock_tiny), do: []
-  defp source_vector_shape(_profile), do: @qwen_source_vector_shape
+  defp route_head_shape(_identity), do: [10, 1024]
 
   defp trace_ref(opts), do: Keyword.get(opts, :trace_ref, "trace:single-node")
 

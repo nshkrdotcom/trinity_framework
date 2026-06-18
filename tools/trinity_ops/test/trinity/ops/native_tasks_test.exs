@@ -260,6 +260,34 @@ defmodule Trinity.Ops.NativeTasksTest do
     assert File.read!(index_path) =~ "| 2 | #{executable} -e IO.puts"
   end
 
+  test "crucible transcript artifact names use collapsed fixed-character sanitizing" do
+    root = tmp_path("crucible_v5_sanitized")
+    executable = System.find_executable("true") || System.find_executable("elixir")
+
+    cases = [
+      {"abc", "abc.log"},
+      {"a b", "a_b.log"},
+      {"a///b", "a_b.log"},
+      {"é/🔥", "command.log"},
+      {"../../path", ".._.._path.log"},
+      {"", "command.log"}
+    ]
+
+    for {name, expected_file} <- cases do
+      assert :ok =
+               Tasks.run(:trinity_crucible_transcript, [
+                 "--name",
+                 name,
+                 "--artifact-root",
+                 root,
+                 "--",
+                 executable
+               ])
+
+      assert File.regular?(Path.join([root, "transcripts", expected_file]))
+    end
+  end
+
   test "parity check performs strict stage checks without the Python wrapper" do
     python_path = tmp_path("python_report.json")
     elixir_path = tmp_path("elixir_report.json")

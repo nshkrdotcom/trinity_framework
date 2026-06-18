@@ -17,6 +17,8 @@ defmodule TrinityFrameworkBoundaryTest do
     "apps/",
     "tools/",
     "examples/",
+    "priv/sakana_trinity/scripts/",
+    "priv/sakana_trinity/reference/",
     "priv/sakana_trinity/artifact_pin.json",
     "priv/sakana_trinity/reference/sakana_python_reference_manifest.json"
   ]
@@ -25,10 +27,15 @@ defmodule TrinityFrameworkBoundaryTest do
     ".config",
     ".ex",
     ".exs",
+    ".eex",
+    ".heex",
     ".json",
     ".lock",
     ".md",
+    ".py",
+    ".sh",
     ".txt",
+    ".yaml",
     ".yml"
   ]
 

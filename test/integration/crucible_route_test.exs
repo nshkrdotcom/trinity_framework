@@ -81,4 +81,62 @@ defmodule TrinityFramework.Integration.CrucibleRouteTest do
     assert "route_selected" in events
     assert result.trace_path == trace_path
   end
+
+  test "Crucible route trace uses custom artifact manifest identity" do
+    artifact_root = Path.join(tmp_dir("custom-artifact"), "custom-artifact")
+    File.mkdir_p!(artifact_root)
+
+    write_json!(Path.join(artifact_root, "manifest.json"), %{
+      "base_model_repo" => "example/non-qwen-router",
+      "router_head_shape" => [4, 16],
+      "selected_tensor_count" => 2,
+      "scale_offset_count" => 12,
+      "source_vector_shape" => [76]
+    })
+
+    write_json!(Path.join(Path.dirname(artifact_root), "artifact_pin.json"), %{
+      "repo_id" => "example/custom-artifact",
+      "revision" => "custom-v2",
+      "manifest_sha256" => String.duplicate("c", 64)
+    })
+
+    messages = [%{"role" => "user", "content" => "Route with custom provenance."}]
+
+    {:ok, runtime} =
+      SingleNode.load_runtime(runtime_profile: :mock_tiny, messages: messages)
+
+    assert {:ok, result} =
+             SingleNode.route(messages,
+               runtime: runtime,
+               runtime_profile: :custom,
+               artifact_root: artifact_root,
+               trace_ref: "trace:custom-artifact",
+               coordination_run_ref: "run:custom-artifact"
+             )
+
+    trace = result.crucible_trace
+
+    assert trace.model_id == "example/non-qwen-router"
+    assert trace.metadata.artifact_status == :available
+    assert trace.metadata.qwen_loaded? == false
+    assert trace.metadata.artifact_ref == "artifact:custom-artifact"
+    assert trace.metadata.artifact_repo == "example/custom-artifact"
+    assert trace.metadata.artifact_revision == "custom-v2"
+    assert trace.metadata.artifact_manifest_sha256 == String.duplicate("c", 64)
+    assert trace.metadata.router_head_shape == [4, 16]
+    assert trace.metadata.selected_tensor_count == 2
+    assert trace.metadata.scale_offset_count == 12
+    assert trace.metadata.source_vector_shape == [76]
+  end
+
+  defp tmp_dir(name) do
+    path = Path.join(System.tmp_dir!(), "trinity-crucible-route-#{name}")
+    File.rm_rf!(path)
+    path
+  end
+
+  defp write_json!(path, payload) do
+    File.mkdir_p!(Path.dirname(path))
+    File.write!(path, Jason.encode!(payload))
+  end
 end

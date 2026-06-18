@@ -55,6 +55,7 @@ defmodule Trinity.SingleNode.MixProject do
       dep(:execution_plane_process),
       dep(:inference),
       dep(:aitrace),
+      {:jason, "~> 1.4"},
       {:hf_hub, "~> 0.3"}
     ] ++ quality_deps()
   end

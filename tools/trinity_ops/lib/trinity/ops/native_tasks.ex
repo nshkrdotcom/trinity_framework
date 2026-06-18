@@ -26,6 +26,7 @@ defmodule Trinity.Ops.NativeTasks do
   alias Trinity.Coordinator.TraceEvent
   alias Trinity.Crucible.TraceAdapter
   alias Trinity.Ops.CommandSpec
+  alias Trinity.Ops.EvalMetadata
   alias Trinity.SingleNode.Config
 
   alias Trinity.SakanaPipeline.{
@@ -269,10 +270,23 @@ defmodule Trinity.Ops.NativeTasks do
     |> Enum.map_join(fn char ->
       if allowed?.(char), do: char, else: "_"
     end)
+    |> collapse_underscores()
   end
 
   defp ascii_letter?(char), do: char in ?A..?Z or char in ?a..?z
   defp ascii_digit?(char), do: char in ?0..?9
+
+  defp collapse_underscores(value), do: collapse_underscores(value, "", false)
+
+  defp collapse_underscores("", acc, _previous?), do: acc
+
+  defp collapse_underscores("_" <> rest, acc, true), do: collapse_underscores(rest, acc, true)
+
+  defp collapse_underscores("_" <> rest, acc, false),
+    do: collapse_underscores(rest, acc <> "_", true)
+
+  defp collapse_underscores(<<char::utf8, rest::binary>>, acc, _previous?),
+    do: collapse_underscores(rest, acc <> <<char::utf8>>, false)
 
   defp route_demo(opts) do
     start_app!()
@@ -468,7 +482,7 @@ defmodule Trinity.Ops.NativeTasks do
     max_cases = Keyword.get(opts, :max_cases)
     cases = prompt_eval_cases(selected_ids, max_cases)
     out = Keyword.get(opts, :out, "tmp/trinity_crucible/matrix_eval.json")
-    metadata = matrix_eval_metadata(runtime_profile)
+    metadata = EvalMetadata.matrix(runtime_profile, artifact_dir)
 
     banner("TRINITY CRUCIBLE MATRIX EVAL")
     kv("Runtime profile", runtime_profile)
@@ -638,33 +652,6 @@ defmodule Trinity.Ops.NativeTasks do
       is_integer(row.trace_signal_count) and row.trace_signal_count > 0 and
       is_binary(row.final_logits_signal_id)
   end
-
-  defp matrix_eval_metadata(runtime_profile) do
-    qwen_loaded? = runtime_profile != :mock_tiny
-
-    %{
-      runtime_profile: Atom.to_string(runtime_profile),
-      eval_mode: matrix_eval_mode(runtime_profile),
-      qwen_loaded?: qwen_loaded?,
-      acceptance_level: matrix_acceptance_level(runtime_profile),
-      snapshot_policy: matrix_snapshot_policy(runtime_profile)
-    }
-  end
-
-  defp matrix_eval_mode(:mock_tiny), do: "mock_tiny contract eval"
-  defp matrix_eval_mode(:cuda_exla), do: "CUDA Qwen route eval"
-  defp matrix_eval_mode(_runtime_profile), do: "Qwen route runtime eval"
-
-  defp matrix_acceptance_level(:mock_tiny), do: "Contract-path eval only; does not load Qwen"
-
-  defp matrix_acceptance_level(_runtime_profile),
-    do: "Route, margin, determinism, and Crucible contract acceptance"
-
-  defp matrix_snapshot_policy(:mock_tiny),
-    do: "No Qwen logits snapshot is used for mock_tiny"
-
-  defp matrix_snapshot_policy(_runtime_profile),
-    do: "Strict Qwen snapshot acceptance belongs to the direct example eval fixture"
 
   defp crucible_matrix_eval_live(opts) do
     require_crucible_live!()

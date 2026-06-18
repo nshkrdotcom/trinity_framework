@@ -200,6 +200,7 @@ defmodule Trinity.Crucible.DecisionAdapter do
     |> Enum.map_join(fn char ->
       if safe_ref_char?(char), do: char, else: "_"
     end)
+    |> collapse_underscores()
   end
 
   defp safe_ref_char?(<<char::utf8>>) do
@@ -210,6 +211,18 @@ defmodule Trinity.Crucible.DecisionAdapter do
 
   defp ascii_letter?(char), do: char in ?A..?Z or char in ?a..?z
   defp ascii_digit?(char), do: char in ?0..?9
+
+  defp collapse_underscores(value), do: collapse_underscores(value, "", false)
+
+  defp collapse_underscores("", acc, _previous?), do: acc
+
+  defp collapse_underscores("_" <> rest, acc, true), do: collapse_underscores(rest, acc, true)
+
+  defp collapse_underscores("_" <> rest, acc, false),
+    do: collapse_underscores(rest, acc <> "_", true)
+
+  defp collapse_underscores(<<char::utf8, rest::binary>>, acc, _previous?),
+    do: collapse_underscores(rest, acc <> <<char::utf8>>, false)
 
   defp attrs_map(attrs) when is_list(attrs), do: Map.new(attrs)
   defp attrs_map(attrs) when is_map(attrs), do: attrs

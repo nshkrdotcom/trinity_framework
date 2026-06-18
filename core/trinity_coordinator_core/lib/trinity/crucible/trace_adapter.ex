@@ -11,6 +11,8 @@ defmodule Trinity.Crucible.TraceAdapter do
   alias Trinity.Coordinator.{RoleInjector, RouteLogits, TraceEvent}
   alias Trinity.Crucible.RequestContext
 
+  @exla_backend_prefix "EXLA" <> ".Backend<"
+
   @spec from_logits(RouteLogits.t(), [map()] | RequestContext.t(), TapPlan.t() | nil, keyword()) ::
           ForwardTrace.t()
   def from_logits(%RouteLogits{} = logits, messages_or_context, tap_plan, opts \\ []) do
@@ -32,7 +34,7 @@ defmodule Trinity.Crucible.TraceAdapter do
       provider_kind: :trinity_route_logits,
       model_id: model_id,
       model_family: :route_logits,
-      backend: backend_label(logits),
+      backend: trace_backend(logits),
       input_hash: logits.transcript_hash || hash(context.messages),
       tap_plan_ref: tap_plan && tap_plan.plan_id,
       signals: [final_record],
@@ -155,7 +157,7 @@ defmodule Trinity.Crucible.TraceAdapter do
       provider_kind: :trinity_route_logits,
       model_id: model_id,
       model_family: :route_logits,
-      backend: backend_label(logits),
+      backend: trace_backend(logits),
       dtype: summary.dtype,
       shape: summary.shape,
       rank: summary.rank,
@@ -257,10 +259,13 @@ defmodule Trinity.Crucible.TraceAdapter do
       backend_label: backend_label(logits),
       runtime_profile: runtime_profile_name(context, logits),
       runtime_kind: :route_logits_adapter,
+      adapter_id: field(profile, :adapter_id),
       artifact_ref: field(profile, :artifact_ref),
       artifact_repo: field(profile, :artifact_repo),
       artifact_revision: field(profile, :artifact_revision),
       artifact_manifest_sha256: field(profile, :artifact_manifest_sha256),
+      artifact_status: field(profile, :artifact_status),
+      qwen_loaded?: field(profile, :qwen_loaded?),
       router_head_shape: field(profile, :router_head_shape),
       selected_tensor_count: field(profile, :selected_tensor_count),
       scale_offset_count: field(profile, :scale_offset_count),
@@ -280,10 +285,13 @@ defmodule Trinity.Crucible.TraceAdapter do
       :model_id,
       :backend_label,
       :runtime_profile,
+      :adapter_id,
       :artifact_ref,
       :artifact_repo,
       :artifact_revision,
       :artifact_manifest_sha256,
+      :artifact_status,
+      :qwen_loaded?,
       :router_head_shape,
       :selected_tensor_count,
       :scale_offset_count,
@@ -320,6 +328,29 @@ defmodule Trinity.Crucible.TraceAdapter do
       true -> nil
     end
   end
+
+  defp trace_backend(%RouteLogits{} = logits) do
+    logits
+    |> backend_label()
+    |> bounded_backend()
+  end
+
+  defp bounded_backend("mock_tiny"), do: :mock_tiny
+  defp bounded_backend("binary"), do: :binary
+  defp bounded_backend("host_exla"), do: :exla_host
+  defp bounded_backend("cuda_exla"), do: :exla_cuda
+
+  defp bounded_backend(label) when is_binary(label) do
+    cond do
+      String.contains?(label, @exla_backend_prefix <> "cuda") -> :exla_cuda
+      String.contains?(label, @exla_backend_prefix <> "host") -> :exla_host
+      String.contains?(label, "cuda") -> :exla_cuda
+      String.contains?(label, "host") -> :exla_host
+      true -> :route_logits
+    end
+  end
+
+  defp bounded_backend(_label), do: :route_logits
 
   defp field(map, field), do: field(map, field, nil)
 
