@@ -6,6 +6,7 @@ defmodule Trinity.Crucible.DecisionAdapter do
   alias CruciblePolicy.RouteDecision, as: CrucibleRouteDecision
   alias Trinity.Coordinator.{RoleInjector, RouteDecision, RouteLogits}
   alias Trinity.Crucible.RequestContext
+  alias Trinity.RefSanitizer
 
   @default_agent_by_role %{worker: 0, thinker: 1, verifier: 2, unknown: 0}
 
@@ -194,35 +195,8 @@ defmodule Trinity.Crucible.DecisionAdapter do
   defp safe_ref(nil), do: "unknown"
 
   defp safe_ref(value) do
-    value
-    |> to_string()
-    |> String.graphemes()
-    |> Enum.map_join(fn char ->
-      if safe_ref_char?(char), do: char, else: "_"
-    end)
-    |> collapse_underscores()
+    RefSanitizer.safe_fragment(value, allow_colon?: true)
   end
-
-  defp safe_ref_char?(<<char::utf8>>) do
-    ascii_letter?(char) or ascii_digit?(char) or char in [45, 46, 58, 95]
-  end
-
-  defp safe_ref_char?(_char), do: false
-
-  defp ascii_letter?(char), do: char in ?A..?Z or char in ?a..?z
-  defp ascii_digit?(char), do: char in ?0..?9
-
-  defp collapse_underscores(value), do: collapse_underscores(value, "", false)
-
-  defp collapse_underscores("", acc, _previous?), do: acc
-
-  defp collapse_underscores("_" <> rest, acc, true), do: collapse_underscores(rest, acc, true)
-
-  defp collapse_underscores("_" <> rest, acc, false),
-    do: collapse_underscores(rest, acc <> "_", true)
-
-  defp collapse_underscores(<<char::utf8, rest::binary>>, acc, _previous?),
-    do: collapse_underscores(rest, acc <> <<char::utf8>>, false)
 
   defp attrs_map(attrs) when is_list(attrs), do: Map.new(attrs)
   defp attrs_map(attrs) when is_map(attrs), do: attrs

@@ -37,7 +37,15 @@ defmodule TrinityFramework.Integration.TraceAdapterTest do
       artifact_repo: "nshkrdotcom/trinity-coordinator-adapted-qwen3-0.6b",
       artifact_revision: "v1.0.0",
       artifact_manifest_sha256: String.duplicate("a", 64),
+      artifact_manifest_sha256_actual: String.duplicate("a", 64),
+      artifact_pin_manifest_sha256: String.duplicate("a", 64),
+      artifact_pin_verified?: true,
       artifact_status: :available,
+      artifact_available?: true,
+      qwen_base_model?: true,
+      sakana_route_artifact?: true,
+      runtime_loaded?: true,
+      executed_runtime?: true,
       qwen_loaded?: true,
       router_head_shape: [10, 1024],
       selected_tensor_count: 9,
@@ -64,6 +72,14 @@ defmodule TrinityFramework.Integration.TraceAdapterTest do
     assert trace.metadata.artifact_ref == "artifact:qwen3-0.6b-sakana"
     assert trace.metadata.artifact_repo == "nshkrdotcom/trinity-coordinator-adapted-qwen3-0.6b"
     assert trace.metadata.artifact_status == :available
+    assert trace.metadata.artifact_manifest_sha256_actual == String.duplicate("a", 64)
+    assert trace.metadata.artifact_pin_manifest_sha256 == String.duplicate("a", 64)
+    assert trace.metadata.artifact_pin_verified? == true
+    assert trace.metadata.artifact_available? == true
+    assert trace.metadata.qwen_base_model? == true
+    assert trace.metadata.sakana_route_artifact? == true
+    assert trace.metadata.runtime_loaded? == true
+    assert trace.metadata.executed_runtime? == true
     assert trace.metadata.qwen_loaded? == true
     assert trace.metadata.router_head_shape == [10, 1024]
     assert trace.metadata.selected_tensor_count == 9
@@ -71,6 +87,8 @@ defmodule TrinityFramework.Integration.TraceAdapterTest do
     assert trace.metadata.source_vector_shape == [19_456]
     assert trace.final_logits.metadata.artifact_ref == "artifact:qwen3-0.6b-sakana"
     assert trace.final_logits.metadata.artifact_status == :available
+    assert trace.final_logits.metadata.artifact_pin_verified? == true
+    assert trace.final_logits.metadata.executed_runtime? == true
   end
 
   test "TraceAdapter does not atomize arbitrary backend labels" do

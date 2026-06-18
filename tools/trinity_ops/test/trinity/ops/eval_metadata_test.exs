@@ -3,25 +3,31 @@ defmodule Trinity.Ops.EvalMetadataTest do
 
   alias Trinity.Ops.EvalMetadata
 
-  @default_artifact_root Path.expand(
-                           "../../../../../priv/sakana_trinity/adapted_qwen3_0_6b_layer26",
+  @fixture_artifact_root Path.expand(
+                           "../../../../../apps/trinity_single_node/test/fixtures/artifacts/qwen_sakana_tiny",
                            __DIR__
                          )
 
   test "mock_tiny reports a contract eval without Qwen" do
-    metadata = EvalMetadata.matrix(:mock_tiny, @default_artifact_root)
+    metadata = EvalMetadata.matrix(:mock_tiny, @fixture_artifact_root)
 
     assert metadata.qwen_loaded? == false
+    assert metadata.qwen_route_ready? == false
     assert metadata.eval_mode == "mock_tiny contract eval"
     assert metadata.acceptance_level =~ "does not load Qwen"
     assert metadata.artifact_status == :mock
   end
 
-  test "cuda_exla with Qwen artifact reports Qwen loaded" do
-    metadata = EvalMetadata.matrix(:cuda_exla, @default_artifact_root)
+  test "cuda_exla with verified Qwen/Sakana artifact reports route readiness" do
+    metadata = EvalMetadata.matrix(:cuda_exla, @fixture_artifact_root)
 
-    assert metadata.qwen_loaded? == true
-    assert metadata.eval_mode == "CUDA Qwen route eval"
+    assert metadata.qwen_loaded? == false
+    assert metadata.qwen_base_model? == true
+    assert metadata.sakana_route_artifact? == true
+    assert metadata.artifact_available? == true
+    assert metadata.artifact_pin_verified? == true
+    assert metadata.qwen_route_ready? == true
+    assert metadata.eval_mode == "CUDA Qwen/Sakana route eval"
     assert metadata.model_id == "Qwen/Qwen3-0.6B"
     assert metadata.adapter_id == :trinity_qwen3_0_6b_sakana
     assert metadata.artifact_status == :available
@@ -39,10 +45,11 @@ defmodule Trinity.Ops.EvalMetadataTest do
     metadata = EvalMetadata.matrix(:custom, root)
 
     assert metadata.qwen_loaded? == false
+    assert metadata.qwen_route_ready? == false
     assert metadata.eval_mode == "route runtime eval without Qwen artifact identity"
     assert metadata.model_id == "example/non-qwen-router"
     assert metadata.adapter_id == nil
-    assert metadata.artifact_status == :available
+    assert metadata.artifact_status == :available_unpinned
   end
 
   test "binary profile without manifest reports unknown Qwen identity" do
@@ -52,6 +59,7 @@ defmodule Trinity.Ops.EvalMetadataTest do
     metadata = EvalMetadata.matrix(:binary, root)
 
     assert metadata.qwen_loaded? == false
+    assert metadata.qwen_route_ready? == false
     assert metadata.eval_mode == "route runtime eval without Qwen artifact identity"
     assert metadata.model_id == nil
     assert metadata.adapter_id == nil

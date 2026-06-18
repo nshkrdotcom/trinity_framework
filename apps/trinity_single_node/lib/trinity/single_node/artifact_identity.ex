@@ -2,15 +2,19 @@ defmodule Trinity.SingleNode.ArtifactIdentity do
   @moduledoc """
   Resolves stable runtime/artifact identity from the artifact on disk.
 
-  Trace provenance must describe the artifact actually supplied to the
-  runtime. Profile names are only fallback context; the adapted artifact
-  manifest and pin are the primary source of Qwen/Sakana identity.
+  Trace provenance must describe the artifact supplied to the executed runtime.
+  Profile names are only fallback context; the adapted artifact manifest and
+  pin are the primary source of Qwen/Sakana identity.
   """
+
+  alias Trinity.RefSanitizer
 
   @qwen_model_id "Qwen/Qwen3-0.6B"
   @mock_model_id "trinity/mock-tiny-route-runtime"
   @qwen_adapter_id :trinity_qwen3_0_6b_sakana
   @mock_adapter_id :mock_tiny
+  @canonical_qwen_repo "nshkrdotcom/trinity-coordinator-adapted-qwen3-0.6b"
+  @canonical_qwen_revision "v1.0.0"
 
   @spec resolve(atom(), String.t() | nil, keyword()) :: map()
   def resolve(runtime_profile, artifact_root, opts \\ [])
@@ -23,16 +27,28 @@ defmodule Trinity.SingleNode.ArtifactIdentity do
       artifact_ref: opt(opts, :artifact_ref, "artifact:mock-tiny-route-runtime"),
       artifact_repo: opt(opts, :artifact_repo),
       artifact_revision: opt(opts, :artifact_revision),
-      artifact_manifest_sha256: opt(opts, :artifact_manifest_sha256),
+      artifact_manifest_sha256: nil,
+      artifact_manifest_sha256_actual: nil,
+      artifact_pin_manifest_sha256: nil,
+      artifact_manifest_path: nil,
+      artifact_pin_path: nil,
       artifact_root: artifact_root,
       artifact_status: :mock,
+      artifact_status_reason: nil,
+      artifact_available?: false,
       artifact_runtime?: false,
+      artifact_pin_verified?: false,
+      qwen_base_model?: false,
+      sakana_route_artifact?: false,
+      runtime_loaded?: false,
+      executed_runtime?: false,
       qwen_loaded?: false,
       router_head_shape: opt(opts, :router_head_shape, [10, 8]),
       selected_tensor_count: opt(opts, :selected_tensor_count, 0),
       scale_offset_count: opt(opts, :scale_offset_count, 0),
       source_vector_shape: opt(opts, :source_vector_shape, [])
     }
+    |> apply_overrides(opts)
   end
 
   def resolve(runtime_profile, artifact_root, opts) do
@@ -41,10 +57,10 @@ defmodule Trinity.SingleNode.ArtifactIdentity do
 
     case load_json(manifest_path) do
       {:ok, manifest} ->
-        pin = load_pin(root, opts)
+        {pin, pin_path} = load_pin(root, opts)
 
         manifest
-        |> identity_from_manifest(runtime_profile, root, manifest_path, pin, opts)
+        |> identity_from_manifest(runtime_profile, root, manifest_path, pin, pin_path, opts)
         |> apply_overrides(opts)
 
       {:error, :missing} ->
@@ -53,40 +69,69 @@ defmodule Trinity.SingleNode.ArtifactIdentity do
 
       {:error, reason} ->
         missing_identity(runtime_profile, root, manifest_path, opts)
-        |> Map.put(:artifact_status, {:invalid_manifest, reason})
+        |> Map.merge(%{
+          artifact_status: :invalid_manifest,
+          artifact_status_reason: to_string(reason)
+        })
         |> apply_overrides(opts)
     end
   end
 
-  defp identity_from_manifest(manifest, runtime_profile, root, manifest_path, pin, opts) do
-    model_id = string_field(manifest, "base_model_repo") || string_field(manifest, "model_id")
-    qwen_loaded? = model_id == @qwen_model_id
+  @spec mark_loaded(map()) :: map()
+  def mark_loaded(identity) when is_map(identity) do
+    qwen_loaded? = qwen_route_ready?(identity)
 
-    %{
+    identity
+    |> Map.put(:runtime_loaded?, true)
+    |> Map.put(:executed_runtime?, true)
+    |> Map.put(:qwen_loaded?, qwen_loaded?)
+  end
+
+  @spec qwen_route_ready?(map()) :: boolean()
+  def qwen_route_ready?(identity) when is_map(identity) do
+    identity.qwen_base_model? and identity.sakana_route_artifact? and identity.artifact_available? and
+      identity.artifact_pin_verified?
+  end
+
+  defp identity_from_manifest(manifest, runtime_profile, root, manifest_path, pin, pin_path, opts) do
+    facts = manifest_facts(manifest)
+    actual_sha = sha256_file(manifest_path)
+    pin_sha = pin_manifest_sha(pin)
+    {status, reason, pin_verified?} = artifact_status(pin_path, pin_sha, actual_sha)
+
+    base_identity = %{
       name: runtime_profile,
-      adapter_id: if(qwen_loaded?, do: @qwen_adapter_id, else: nil),
-      model_id: model_id,
-      artifact_ref:
-        opt(opts, :artifact_ref) || default_artifact_ref(qwen_loaded?, root, runtime_profile),
+      adapter_id: if(facts.sakana_route_artifact?, do: @qwen_adapter_id, else: nil),
+      model_id: facts.model_id,
       artifact_repo: string_field(pin, "repo_id"),
       artifact_revision: string_field(pin, "revision"),
-      artifact_manifest_sha256:
-        string_field(pin, "manifest_sha256") || pinned_manifest_sha(pin) ||
-          sha256_file(manifest_path),
+      artifact_manifest_sha256: actual_sha,
+      artifact_manifest_sha256_actual: actual_sha,
+      artifact_pin_manifest_sha256: pin_sha,
+      artifact_manifest_path: manifest_path,
+      artifact_pin_path: pin_path,
       artifact_root: root,
-      artifact_status: :available,
-      artifact_runtime?: true,
-      qwen_loaded?: qwen_loaded?,
-      router_head_shape:
-        list_field(manifest, "router_head_shape") || routing_field(manifest, "head_shape"),
-      selected_tensor_count:
-        integer_field(manifest, "selected_tensor_count") ||
-          count_list(manifest, "selected_tensors"),
-      scale_offset_count:
-        integer_field(manifest, "scale_offset_count") ||
-          get_in(manifest, ["source_split", "scale_count"]),
-      source_vector_shape: list_field(manifest, "source_vector_shape")
+      artifact_status: status,
+      artifact_status_reason: reason,
+      artifact_available?: artifact_available_status?(status),
+      artifact_runtime?: artifact_available_status?(status),
+      artifact_pin_verified?: pin_verified?,
+      qwen_base_model?: facts.qwen_base_model?,
+      sakana_route_artifact?: facts.sakana_route_artifact?,
+      runtime_loaded?: false,
+      executed_runtime?: false,
+      qwen_loaded?: false,
+      router_head_shape: facts.router_head_shape,
+      selected_tensor_count: facts.selected_tensor_count,
+      scale_offset_count: facts.scale_offset_count,
+      source_vector_shape: facts.source_vector_shape
     }
+
+    Map.put(
+      base_identity,
+      :artifact_ref,
+      opt(opts, :artifact_ref) || default_artifact_ref(base_identity, root, runtime_profile)
+    )
   end
 
   defp missing_identity(runtime_profile, root, manifest_path, opts) do
@@ -95,14 +140,24 @@ defmodule Trinity.SingleNode.ArtifactIdentity do
       adapter_id: nil,
       model_id: opt(opts, :model_id),
       artifact_ref:
-        opt(opts, :artifact_ref) || default_artifact_ref(false, root, runtime_profile),
+        opt(opts, :artifact_ref) || default_missing_artifact_ref(root, runtime_profile),
       artifact_repo: opt(opts, :artifact_repo),
       artifact_revision: opt(opts, :artifact_revision),
-      artifact_manifest_sha256: opt(opts, :artifact_manifest_sha256),
-      artifact_root: root,
+      artifact_manifest_sha256: nil,
+      artifact_manifest_sha256_actual: nil,
+      artifact_pin_manifest_sha256: nil,
       artifact_manifest_path: manifest_path,
+      artifact_pin_path: nil,
+      artifact_root: root,
       artifact_status: :missing,
+      artifact_status_reason: "manifest.json not found",
+      artifact_available?: false,
       artifact_runtime?: false,
+      artifact_pin_verified?: false,
+      qwen_base_model?: false,
+      sakana_route_artifact?: false,
+      runtime_loaded?: false,
+      executed_runtime?: false,
       qwen_loaded?: false,
       router_head_shape: opt(opts, :router_head_shape),
       selected_tensor_count: opt(opts, :selected_tensor_count),
@@ -118,7 +173,6 @@ defmodule Trinity.SingleNode.ArtifactIdentity do
       :artifact_ref,
       :artifact_repo,
       :artifact_revision,
-      :artifact_manifest_sha256,
       :router_head_shape,
       :selected_tensor_count,
       :scale_offset_count,
@@ -134,17 +188,93 @@ defmodule Trinity.SingleNode.ArtifactIdentity do
   end
 
   defp refresh_capabilities(identity) do
-    qwen_loaded? = identity.model_id == @qwen_model_id
+    qwen_base_model? = qwen_base_model?(identity.model_id)
+    sakana_route_artifact? = sakana_route_artifact?(identity, qwen_base_model?)
+    artifact_available? = artifact_available_status?(identity.artifact_status)
+    artifact_runtime? = artifact_available?
+
+    qwen_loaded? =
+      loaded_qwen_route?(identity, qwen_base_model?, sakana_route_artifact?, artifact_available?)
 
     identity
+    |> Map.put(:qwen_base_model?, qwen_base_model?)
+    |> Map.put(:sakana_route_artifact?, sakana_route_artifact?)
+    |> Map.put(:artifact_available?, artifact_available?)
+    |> Map.put(:artifact_runtime?, artifact_runtime?)
     |> Map.put(:qwen_loaded?, qwen_loaded?)
     |> Map.put(
       :adapter_id,
-      identity.adapter_id || if(qwen_loaded?, do: @qwen_adapter_id, else: nil)
+      identity.adapter_id || if(sakana_route_artifact?, do: @qwen_adapter_id, else: nil)
     )
   end
 
-  defp load_pin(nil, _opts), do: %{}
+  defp manifest_facts(manifest) do
+    model_id = string_field(manifest, "base_model_repo") || string_field(manifest, "model_id")
+
+    router_head_shape =
+      list_field(manifest, "router_head_shape") || routing_field(manifest, "head_shape")
+
+    selected_tensor_count = selected_tensor_count(manifest)
+    scale_offset_count = scale_offset_count(manifest)
+    qwen_base_model? = qwen_base_model?(model_id)
+
+    %{
+      model_id: model_id,
+      qwen_base_model?: qwen_base_model?,
+      sakana_route_artifact?:
+        sakana_route_artifact?(
+          qwen_base_model?,
+          router_head_shape,
+          selected_tensor_count,
+          scale_offset_count
+        ),
+      router_head_shape: router_head_shape,
+      selected_tensor_count: selected_tensor_count,
+      scale_offset_count: scale_offset_count,
+      source_vector_shape: list_field(manifest, "source_vector_shape")
+    }
+  end
+
+  defp selected_tensor_count(manifest) do
+    integer_field(manifest, "selected_tensor_count") || count_list(manifest, "selected_tensors")
+  end
+
+  defp scale_offset_count(manifest) do
+    integer_field(manifest, "scale_offset_count") ||
+      integer_field(manifest, "selected_singular_value_count") ||
+      get_in(manifest, ["source_split", "scale_count"])
+  end
+
+  defp qwen_base_model?(model_id), do: model_id == @qwen_model_id
+
+  defp sakana_route_artifact?(identity, qwen_base_model?) do
+    sakana_route_artifact?(
+      qwen_base_model?,
+      identity.router_head_shape,
+      identity.selected_tensor_count,
+      identity.scale_offset_count
+    )
+  end
+
+  defp sakana_route_artifact?(
+         qwen_base_model?,
+         router_head_shape,
+         selected_tensor_count,
+         scale_offset_count
+       ) do
+    qwen_base_model? and list_pair?(router_head_shape) and
+      positive_integer?(selected_tensor_count) and
+      positive_integer?(scale_offset_count)
+  end
+
+  defp artifact_available_status?(status), do: status in [:available, :available_unpinned]
+
+  defp loaded_qwen_route?(identity, qwen_base_model?, sakana_route_artifact?, artifact_available?) do
+    identity.runtime_loaded? and qwen_base_model? and sakana_route_artifact? and
+      artifact_available? and identity.artifact_pin_verified?
+  end
+
+  defp load_pin(nil, _opts), do: {%{}, nil}
 
   defp load_pin(root, opts) do
     candidates =
@@ -156,12 +286,11 @@ defmodule Trinity.SingleNode.ArtifactIdentity do
       ]
       |> Enum.reject(&is_nil/1)
 
-    candidates
-    |> Enum.find(&File.regular?/1)
-    |> load_json()
-    |> case do
-      {:ok, pin} -> pin
-      _other -> %{}
+    with path when is_binary(path) <- Enum.find(candidates, &File.regular?/1),
+         {:ok, pin} <- load_json(path) do
+      {pin, path}
+    else
+      _other -> {%{}, nil}
     end
   end
 
@@ -179,47 +308,60 @@ defmodule Trinity.SingleNode.ArtifactIdentity do
     end
   end
 
-  defp default_artifact_ref(true, _root, _runtime_profile), do: "artifact:qwen3-0.6b-sakana"
+  defp artifact_status(nil, nil, _actual_sha),
+    do: {:available_unpinned, "artifact pin not found", false}
 
-  defp default_artifact_ref(false, root, runtime_profile) when is_binary(root) do
-    "artifact:#{safe_fragment(Path.basename(root), Atom.to_string(runtime_profile))}"
-  end
+  defp artifact_status(_pin_path, nil, _actual_sha),
+    do: {:pin_missing, "artifact pin does not include manifest sha256", false}
 
-  defp default_artifact_ref(false, _root, runtime_profile),
-    do: "artifact:#{Atom.to_string(runtime_profile)}"
+  defp artifact_status(_pin_path, pin_sha, actual_sha) when pin_sha == actual_sha,
+    do: {:available, nil, true}
 
-  defp safe_fragment(value, fallback) do
-    value
-    |> to_string()
-    |> String.graphemes()
-    |> Enum.map_join(fn char ->
-      if safe_ref_char?(char), do: char, else: "_"
-    end)
-    |> collapse_underscores()
-    |> String.trim("_")
-    |> case do
-      "" -> fallback
-      safe -> safe
+  defp artifact_status(_pin_path, _pin_sha, _actual_sha),
+    do: {:pin_mismatch, "artifact pin manifest sha256 does not match manifest.json", false}
+
+  defp default_artifact_ref(identity, root, runtime_profile) do
+    cond do
+      canonical_qwen_artifact?(identity) ->
+        "artifact:qwen3-0.6b-sakana"
+
+      identity.artifact_repo && identity.artifact_revision &&
+          identity.artifact_manifest_sha256_actual ->
+        repo =
+          RefSanitizer.safe_fragment(identity.artifact_repo, allow_colon?: false, trim?: true)
+
+        revision =
+          RefSanitizer.safe_fragment(identity.artifact_revision, allow_colon?: false, trim?: true)
+
+        "artifact:#{repo}:#{revision}:#{short_sha(identity.artifact_manifest_sha256_actual)}"
+
+      identity.artifact_manifest_sha256_actual ->
+        base = root_fragment(root, runtime_profile)
+        "artifact:#{base}:#{short_sha(identity.artifact_manifest_sha256_actual)}"
+
+      true ->
+        "artifact:#{root_fragment(root, runtime_profile)}"
     end
   end
 
-  defp safe_ref_char?(<<char::utf8>>) do
-    ascii_letter?(char) or ascii_digit?(char) or char in [45, 46, 58, 95]
+  defp canonical_qwen_artifact?(identity) do
+    identity.sakana_route_artifact? and identity.artifact_repo == @canonical_qwen_repo and
+      identity.artifact_revision == @canonical_qwen_revision and identity.artifact_pin_verified?
   end
 
-  defp safe_ref_char?(_char), do: false
+  defp default_missing_artifact_ref(root, runtime_profile) do
+    "artifact:#{root_fragment(root, runtime_profile)}"
+  end
 
-  defp collapse_underscores(value), do: collapse_underscores(value, "", false)
+  defp root_fragment(root, runtime_profile) when is_binary(root) do
+    RefSanitizer.safe_fragment(Path.basename(root),
+      fallback: Atom.to_string(runtime_profile),
+      allow_colon?: false,
+      trim?: true
+    )
+  end
 
-  defp collapse_underscores("", acc, _previous?), do: acc
-
-  defp collapse_underscores("_" <> rest, acc, true), do: collapse_underscores(rest, acc, true)
-
-  defp collapse_underscores("_" <> rest, acc, false),
-    do: collapse_underscores(rest, acc <> "_", true)
-
-  defp collapse_underscores(<<char::utf8, rest::binary>>, acc, _previous?),
-    do: collapse_underscores(rest, acc <> <<char::utf8>>, false)
+  defp root_fragment(_root, runtime_profile), do: Atom.to_string(runtime_profile)
 
   defp string_field(map, key) when is_map(map) do
     case Map.get(map, key) do
@@ -256,14 +398,16 @@ defmodule Trinity.SingleNode.ArtifactIdentity do
     end
   end
 
-  defp pinned_manifest_sha(%{"files" => files}) when is_list(files) do
+  defp pin_manifest_sha(%{"manifest_sha256" => sha}) when is_binary(sha) and sha != "", do: sha
+
+  defp pin_manifest_sha(%{"files" => files}) when is_list(files) do
     Enum.find_value(files, fn
-      %{"path" => "manifest.json", "sha256" => sha} when is_binary(sha) -> sha
+      %{"path" => "manifest.json", "sha256" => sha} when is_binary(sha) and sha != "" -> sha
       _other -> nil
     end)
   end
 
-  defp pinned_manifest_sha(_pin), do: nil
+  defp pin_manifest_sha(_pin), do: nil
 
   defp sha256_file(nil), do: nil
 
@@ -274,8 +418,14 @@ defmodule Trinity.SingleNode.ArtifactIdentity do
     |> Base.encode16(case: :lower)
   end
 
-  defp opt(opts, key, default \\ nil), do: Keyword.get(opts, key, default)
+  defp short_sha(nil), do: "unknown"
+  defp short_sha(<<prefix::binary-size(12), _rest::binary>>), do: prefix
+  defp short_sha(value), do: value
 
-  defp ascii_letter?(char), do: char in ?A..?Z or char in ?a..?z
-  defp ascii_digit?(char), do: char in ?0..?9
+  defp list_pair?([left, right]) when is_integer(left) and is_integer(right), do: true
+  defp list_pair?(_value), do: false
+
+  defp positive_integer?(value), do: is_integer(value) and value > 0
+
+  defp opt(opts, key, default \\ nil), do: Keyword.get(opts, key, default)
 end

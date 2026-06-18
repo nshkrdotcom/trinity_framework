@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "repo_id": "example/qwen-sakana-tiny",
+  "revision": "fixture-v1",
+  "manifest_sha256": "79836c21c7dfa5ba71246598ab0528d128179d8d67483472b31731a2af2ccd92",
+  "files": [
+    {
+      "path": "manifest.json",
+      "sha256": "79836c21c7dfa5ba71246598ab0528d128179d8d67483472b31731a2af2ccd92"
+    }
+  ]
+}

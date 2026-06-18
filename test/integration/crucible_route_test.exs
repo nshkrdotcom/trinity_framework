@@ -82,7 +82,7 @@ defmodule TrinityFramework.Integration.CrucibleRouteTest do
     assert result.trace_path == trace_path
   end
 
-  test "Crucible route trace uses custom artifact manifest identity" do
+  test "Crucible route rejects requested identity that conflicts with loaded runtime" do
     artifact_root = Path.join(tmp_dir("custom-artifact"), "custom-artifact")
     File.mkdir_p!(artifact_root)
 
@@ -94,10 +94,12 @@ defmodule TrinityFramework.Integration.CrucibleRouteTest do
       "source_vector_shape" => [76]
     })
 
-    write_json!(Path.join(Path.dirname(artifact_root), "artifact_pin.json"), %{
+    manifest_sha = sha256_file(Path.join(artifact_root, "manifest.json"))
+
+    write_json!(Path.join(artifact_root, "artifact_pin.json"), %{
       "repo_id" => "example/custom-artifact",
       "revision" => "custom-v2",
-      "manifest_sha256" => String.duplicate("c", 64)
+      "manifest_sha256" => manifest_sha
     })
 
     messages = [%{"role" => "user", "content" => "Route with custom provenance."}]
@@ -105,7 +107,7 @@ defmodule TrinityFramework.Integration.CrucibleRouteTest do
     {:ok, runtime} =
       SingleNode.load_runtime(runtime_profile: :mock_tiny, messages: messages)
 
-    assert {:ok, result} =
+    assert {:error, {:runtime_identity_mismatch, details}} =
              SingleNode.route(messages,
                runtime: runtime,
                runtime_profile: :custom,
@@ -114,19 +116,11 @@ defmodule TrinityFramework.Integration.CrucibleRouteTest do
                coordination_run_ref: "run:custom-artifact"
              )
 
-    trace = result.crucible_trace
-
-    assert trace.model_id == "example/non-qwen-router"
-    assert trace.metadata.artifact_status == :available
-    assert trace.metadata.qwen_loaded? == false
-    assert trace.metadata.artifact_ref == "artifact:custom-artifact"
-    assert trace.metadata.artifact_repo == "example/custom-artifact"
-    assert trace.metadata.artifact_revision == "custom-v2"
-    assert trace.metadata.artifact_manifest_sha256 == String.duplicate("c", 64)
-    assert trace.metadata.router_head_shape == [4, 16]
-    assert trace.metadata.selected_tensor_count == 2
-    assert trace.metadata.scale_offset_count == 12
-    assert trace.metadata.source_vector_shape == [76]
+    assert details.reason == :runtime_profile
+    assert details.requested_profile == :custom
+    assert details.requested_artifact_ref =~ "artifact:example_custom-artifact:custom-v2:"
+    assert details.executed_profile == :mock_tiny
+    assert details.executed_artifact_ref == "artifact:mock-tiny-route-runtime"
   end
 
   defp tmp_dir(name) do
@@ -138,5 +132,12 @@ defmodule TrinityFramework.Integration.CrucibleRouteTest do
   defp write_json!(path, payload) do
     File.mkdir_p!(Path.dirname(path))
     File.write!(path, Jason.encode!(payload))
+  end
+
+  defp sha256_file(path) do
+    path
+    |> File.read!()
+    |> then(&:crypto.hash(:sha256, &1))
+    |> Base.encode16(case: :lower)
   end
 end

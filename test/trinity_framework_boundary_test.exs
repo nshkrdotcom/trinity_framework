@@ -16,6 +16,7 @@ defmodule TrinityFrameworkBoundaryTest do
     "bridges/",
     "apps/",
     "tools/",
+    "tools/python/",
     "examples/",
     "priv/sakana_trinity/scripts/",
     "priv/sakana_trinity/reference/",
@@ -49,6 +50,11 @@ defmodule TrinityFrameworkBoundaryTest do
     assert no_matches?(runtime_rule_paths(), runtime_forbidden_terms())
   end
 
+  test "external Python trace-provider scripts are inside boundary scan roots" do
+    assert "tools/python/crucible_torch_trace.py" in source_paths()
+    refute File.dir?("python")
+  end
+
   defp no_matches?(paths, terms) do
     matches =
       for path <- paths,
@@ -71,15 +77,51 @@ defmodule TrinityFrameworkBoundaryTest do
   end
 
   defp source_paths do
-    {files, 0} = System.cmd("git", ["ls-files", "--cached", "--others", "--exclude-standard"])
+    paths =
+      case git_source_paths() do
+        [] -> filesystem_source_paths()
+        paths -> paths
+      end
 
-    files
-    |> String.split("\n", trim: true)
+    paths
     |> Enum.filter(fn path ->
       File.regular?(path) and in_scan_root?(path) and text_file?(path)
     end)
     |> Enum.uniq()
     |> Enum.sort()
+  end
+
+  defp git_source_paths do
+    case System.cmd("git", ["ls-files", "--cached", "--others", "--exclude-standard"],
+           stderr_to_stdout: true
+         ) do
+      {files, 0} -> String.split(files, "\n", trim: true)
+      {_output, _status} -> []
+    end
+  end
+
+  defp filesystem_source_paths do
+    Enum.flat_map(@scan_roots, &walk_source_path/1)
+  end
+
+  defp walk_source_path(path) do
+    cond do
+      File.regular?(path) ->
+        [path]
+
+      File.dir?(path) ->
+        path
+        |> File.ls!()
+        |> Enum.reject(&ignored_source_entry?/1)
+        |> Enum.flat_map(&walk_source_path(Path.join(path, &1)))
+
+      true ->
+        []
+    end
+  end
+
+  defp ignored_source_entry?(entry) do
+    entry in [".git", "_build", "deps", "dist", "doc", "erl_crash.dump"]
   end
 
   defp boundary_excluded?(path) do
@@ -88,8 +130,14 @@ defmodule TrinityFrameworkBoundaryTest do
 
   defp runtime_rule_excluded?(path) do
     path == "test/trinity_framework_boundary_test.exs" or
-      path == "config/runtime.exs" or
-      String.ends_with?(path, "/config/runtime.exs")
+      runtime_config_source?(path)
+  end
+
+  defp runtime_config_source?(path) do
+    path == "config/runtime.exs" or
+      String.ends_with?(path, "/config/runtime.exs") or
+      String.starts_with?(path, "config/runtime_sources/") or
+      String.starts_with?(path, "config/sources/")
   end
 
   defp in_scan_root?(path) do

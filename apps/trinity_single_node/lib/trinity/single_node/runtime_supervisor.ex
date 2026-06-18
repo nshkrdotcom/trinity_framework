@@ -22,7 +22,7 @@ defmodule Trinity.SingleNode.RuntimeSupervisor do
   }
 
   alias Trinity.Crucible.{DecisionAdapter, RequestContext, TapPlanBuilder, TraceAdapter}
-  alias Trinity.SingleNode.{ArtifactIdentity, Config}
+  alias Trinity.SingleNode.{ArtifactIdentity, Config, LoadedRuntime}
 
   @default_name __MODULE__
 
@@ -37,24 +37,29 @@ defmodule Trinity.SingleNode.RuntimeSupervisor do
     {:ok, %{opts: opts}}
   end
 
-  @spec load_runtime(keyword()) :: {:ok, RuntimeAdapter.t()} | {:error, term()}
+  @spec load_runtime(keyword()) :: {:ok, LoadedRuntime.t()} | {:error, term()}
   def load_runtime(opts \\ []) do
     opts = normalize_opts(opts)
+    profile = runtime_profile(opts)
+    identity = artifact_identity(profile, opts)
 
     with :ok <- ensure_runtime_backend(),
-         plan <- extraction_plan(Keyword.get(opts, :messages, []), opts) do
-      RuntimeAdapter.load(plan, runtime_adapter_opts(opts))
+         plan <- extraction_plan(Keyword.get(opts, :messages, []), opts, profile, identity),
+         {:ok, %RuntimeAdapter{} = runtime} <-
+           RuntimeAdapter.load(plan, runtime_adapter_opts(opts, profile, identity)) do
+      {:ok, LoadedRuntime.new(runtime, profile, identity, backend_identity(runtime, profile))}
     end
   end
 
   @spec acquire_lease(keyword()) :: {:ok, map()} | {:error, term()}
   def acquire_lease(opts \\ []) do
-    with {:ok, %RuntimeAdapter{} = runtime} <- load_runtime(opts),
+    with {:ok, %LoadedRuntime{} = loaded_runtime} <- load_runtime(opts),
+         runtime <- loaded_runtime.runtime,
          {:ok, %{endpoint: endpoint, lease: lease}} <-
            SelfHostedInferenceCore.lease_instance(runtime.instance.instance_id, lease_opts(opts)) do
       {:ok,
        %{
-         runtime: runtime,
+         runtime: loaded_runtime,
          instance: runtime.instance,
          endpoint: endpoint,
          lease: lease
@@ -73,20 +78,31 @@ defmodule Trinity.SingleNode.RuntimeSupervisor do
   def route(_messages, _opts), do: {:error, :invalid_messages}
 
   defp route_via_crucible(messages, opts) do
-    plan = extraction_plan(messages, opts)
+    requested_profile = runtime_profile(opts)
+    requested_identity = artifact_identity(requested_profile, opts)
 
-    with {:ok, runtime} <- runtime_for_plan(plan, opts),
-         {:ok, logits} <- RuntimeAdapter.route(runtime, plan, route_opts(opts)),
-         context <- request_context(messages, opts),
-         {:ok, tap_plan} <- TapPlanBuilder.build(context, crucible_runtime_profile(opts)),
+    with {:ok, loaded_runtime, plan, profile, identity} <-
+           runtime_for_request(messages, opts, requested_profile, requested_identity),
+         {:ok, logits} <- RuntimeAdapter.route(loaded_runtime.runtime, plan, route_opts(opts)),
+         runtime_profile <- crucible_runtime_profile(profile, identity),
+         context <- request_context(messages, opts, profile, identity),
+         {:ok, tap_plan} <- TapPlanBuilder.build(context, runtime_profile),
          trace <- TraceAdapter.from_logits(logits, context, tap_plan, trace_opts(opts)),
          crucible_decision <- TraceAdapter.route_decision_from_logits(logits, trace),
-         {:ok, decision} <- derive_crucible_decision(crucible_decision, context, logits, opts),
+         {:ok, decision} <-
+           derive_crucible_decision(
+             crucible_decision,
+             context,
+             logits,
+             opts,
+             runtime_profile,
+             identity
+           ),
          :ok <- maybe_trace_crucible(trace, opts),
          :ok <- maybe_trace_route(decision, opts) do
       {:ok,
        %{
-         runtime: runtime,
+         runtime: loaded_runtime,
          logits: logits,
          decision: decision,
          router_decision: RouteDecision.to_router_decision(decision),
@@ -122,9 +138,13 @@ defmodule Trinity.SingleNode.RuntimeSupervisor do
     profile = runtime_profile(opts)
     identity = artifact_identity(profile, opts)
 
+    extraction_plan(messages, opts, profile, identity)
+  end
+
+  defp extraction_plan(messages, opts, profile, identity) when is_list(messages) do
     %HiddenStateExtractionPlan{
       adapter_ref: adapter_ref(profile, identity, opts),
-      artifact_ref: artifact_ref(opts),
+      artifact_ref: artifact_ref(profile, opts, identity),
       runtime_profile_ref: runtime_profile_ref(profile, identity),
       messages: messages,
       options: %{
@@ -142,26 +162,111 @@ defmodule Trinity.SingleNode.RuntimeSupervisor do
     }
   end
 
-  defp runtime_for_plan(plan, opts) do
+  defp runtime_for_request(messages, opts, requested_profile, requested_identity) do
     case Keyword.get(opts, :runtime) do
-      %RuntimeAdapter{} = runtime -> {:ok, runtime}
-      nil -> RuntimeAdapter.load(plan, runtime_adapter_opts(opts))
-      other -> {:error, {:invalid_runtime, other}}
+      %LoadedRuntime{} = loaded_runtime ->
+        with :ok <-
+               ensure_loaded_runtime_matches_request(
+                 loaded_runtime,
+                 opts,
+                 requested_profile,
+                 requested_identity
+               ) do
+          profile = loaded_runtime.runtime_profile
+          identity = loaded_runtime.artifact_identity
+          plan = extraction_plan(messages, opts, profile, identity)
+
+          {:ok, loaded_runtime, plan, profile, identity}
+        end
+
+      %RuntimeAdapter{} ->
+        {:error, :unbound_runtime_identity}
+
+      nil ->
+        plan = extraction_plan(messages, opts, requested_profile, requested_identity)
+
+        with {:ok, %RuntimeAdapter{} = runtime} <-
+               RuntimeAdapter.load(
+                 plan,
+                 runtime_adapter_opts(opts, requested_profile, requested_identity)
+               ) do
+          loaded_runtime =
+            LoadedRuntime.new(
+              runtime,
+              requested_profile,
+              requested_identity,
+              backend_identity(runtime, requested_profile)
+            )
+
+          {:ok, loaded_runtime, plan, requested_profile, loaded_runtime.artifact_identity}
+        end
+
+      other ->
+        {:error, {:invalid_runtime, other}}
     end
   end
 
-  defp derive_crucible_decision(crucible_decision, %RequestContext{} = context, logits, opts) do
+  defp ensure_loaded_runtime_matches_request(
+         %LoadedRuntime{} = loaded_runtime,
+         opts,
+         requested_profile,
+         requested_identity
+       ) do
+    executed_identity = loaded_runtime.artifact_identity
+
+    cond do
+      Keyword.has_key?(opts, :runtime_profile) and
+          requested_profile != loaded_runtime.runtime_profile ->
+        runtime_identity_mismatch(:runtime_profile, loaded_runtime, requested_identity)
+
+      Keyword.has_key?(opts, :artifact_root) and
+          normalize_path(requested_identity.artifact_root) !=
+            normalize_path(executed_identity.artifact_root) ->
+        runtime_identity_mismatch(:artifact_root, loaded_runtime, requested_identity)
+
+      Keyword.has_key?(opts, :artifact_ref) and
+          requested_identity.artifact_ref != executed_identity.artifact_ref ->
+        runtime_identity_mismatch(:artifact_ref, loaded_runtime, requested_identity)
+
+      true ->
+        :ok
+    end
+  end
+
+  defp runtime_identity_mismatch(reason, %LoadedRuntime{} = loaded_runtime, requested_identity) do
+    {:error,
+     {:runtime_identity_mismatch,
+      %{
+        reason: reason,
+        requested_profile: requested_identity.name,
+        requested_artifact_ref: requested_identity.artifact_ref,
+        requested_artifact_root: requested_identity.artifact_root,
+        executed_profile: loaded_runtime.runtime_profile,
+        executed_artifact_ref: loaded_runtime.artifact_identity.artifact_ref,
+        executed_artifact_root: loaded_runtime.artifact_identity.artifact_root
+      }}}
+  end
+
+  defp derive_crucible_decision(
+         crucible_decision,
+         %RequestContext{} = context,
+         logits,
+         opts,
+         runtime_profile,
+         identity
+       ) do
     DecisionAdapter.adapt(crucible_decision,
       request_context: context,
       transcript_hash: logits.transcript_hash,
       token_count: logits.token_count,
-      runtime_profile: crucible_runtime_profile(opts),
+      runtime_profile: runtime_profile,
       coordination_run_ref: coordination_run_ref(opts),
       trace_ref: trace_ref(opts),
       router_artifact_ref: "crucible_policy:trinity_route_logits",
       extractor_ref: "crucible_trace:#{trace_ref(opts)}",
       head_ref: "crucible_policy_plan:trinity_route_logits",
-      metadata: %{runtime_profile: runtime_profile(opts), route_path: :crucible}
+      artifact_identity: identity,
+      metadata: %{runtime_profile: runtime_profile.name, route_path: :crucible}
     )
   end
 
@@ -246,14 +351,14 @@ defmodule Trinity.SingleNode.RuntimeSupervisor do
     }
   end
 
-  defp runtime_adapter_opts(opts) do
+  defp runtime_adapter_opts(opts, profile, identity) do
     [
       await_timeout: Keyword.get(opts, :await_timeout, 5_000),
       backend_options: Keyword.get(opts, :backend_options, %{}),
       load_adapter?: Keyword.get(opts, :load_adapter?, true),
       register_backend?: Keyword.get(opts, :register_backend?, true),
-      route_head: route_head_spec(runtime_profile(opts), artifact_identity(opts), opts),
-      runtime_profile: runtime_profile(opts),
+      route_head: route_head_spec(profile, identity, opts),
+      runtime_profile: profile,
       runtime_options: Keyword.get(opts, :runtime_options, []),
       startup_kind: Keyword.get(opts, :startup_kind, :attach_existing_service)
     ]
@@ -297,17 +402,14 @@ defmodule Trinity.SingleNode.RuntimeSupervisor do
       name: profile,
       kind: :route_logits,
       require_cuda?: profile == :cuda_exla,
-      qwen_runtime?: identity.qwen_loaded?,
+      qwen_runtime?: ArtifactIdentity.qwen_route_ready?(identity),
       artifact_runtime?: identity.artifact_runtime?,
       capabilities: %{route_logits?: true},
       metadata: %{artifact_identity: identity}
     }
   end
 
-  defp crucible_runtime_profile(opts) do
-    profile = runtime_profile(opts)
-    identity = artifact_identity(profile, opts)
-
+  defp crucible_runtime_profile(profile, identity) do
     %{
       name: profile,
       kind: :crucible,
@@ -317,8 +419,19 @@ defmodule Trinity.SingleNode.RuntimeSupervisor do
       artifact_repo: identity.artifact_repo,
       artifact_revision: identity.artifact_revision,
       artifact_manifest_sha256: identity.artifact_manifest_sha256,
+      artifact_manifest_sha256_actual: identity.artifact_manifest_sha256_actual,
+      artifact_pin_manifest_sha256: identity.artifact_pin_manifest_sha256,
+      artifact_pin_verified?: identity.artifact_pin_verified?,
+      artifact_manifest_path: identity.artifact_manifest_path,
+      artifact_pin_path: identity.artifact_pin_path,
       artifact_root: identity.artifact_root,
       artifact_status: identity.artifact_status,
+      artifact_status_reason: identity.artifact_status_reason,
+      artifact_available?: identity.artifact_available?,
+      qwen_base_model?: identity.qwen_base_model?,
+      sakana_route_artifact?: identity.sakana_route_artifact?,
+      runtime_loaded?: identity.runtime_loaded?,
+      executed_runtime?: identity.executed_runtime?,
       qwen_loaded?: identity.qwen_loaded?,
       router_head_shape: identity.router_head_shape,
       selected_tensor_count: identity.selected_tensor_count,
@@ -329,13 +442,13 @@ defmodule Trinity.SingleNode.RuntimeSupervisor do
     }
   end
 
-  defp request_context(messages, opts) do
+  defp request_context(messages, opts, profile, identity) do
     RequestContext.from_messages(messages,
       task_type: Keyword.get(opts, :task_type),
       turn: Keyword.get(opts, :turn, 0),
       trace_ref: trace_ref(opts),
       coordination_run_ref: coordination_run_ref(opts),
-      runtime_profile: crucible_runtime_profile(opts),
+      runtime_profile: crucible_runtime_profile(profile, identity),
       capabilities: [:route_logits],
       metadata: %{route_path: :crucible}
     )
@@ -355,13 +468,8 @@ defmodule Trinity.SingleNode.RuntimeSupervisor do
       )
   end
 
-  defp artifact_ref(opts) do
-    artifact_ref(runtime_profile(opts), opts)
-  end
-
-  defp artifact_ref(profile, opts) do
+  defp artifact_ref(profile, opts, identity) do
     artifact_root = artifact_root(opts)
-    identity = artifact_identity(profile, opts)
 
     %ArtifactRef{
       artifact_ref: identity.artifact_ref,
@@ -385,14 +493,16 @@ defmodule Trinity.SingleNode.RuntimeSupervisor do
 
   defp artifact_root(opts), do: Keyword.get(opts, :artifact_root, Config.artifact_root())
 
-  defp artifact_identity(opts), do: artifact_identity(runtime_profile(opts), opts)
-
   defp artifact_identity(profile, opts),
     do: ArtifactIdentity.resolve(profile, artifact_root(opts), opts)
 
   defp artifact_kind(:mock_tiny, _identity), do: :mock_tiny_route_runtime
-  defp artifact_kind(_profile, %{qwen_loaded?: true}), do: :qwen_sakana_adapted
-  defp artifact_kind(_profile, _identity), do: :custom_route_runtime
+
+  defp artifact_kind(_profile, identity) do
+    if ArtifactIdentity.qwen_route_ready?(identity),
+      do: :qwen_sakana_adapted,
+      else: :custom_route_runtime
+  end
 
   defp route_head_shape(%{router_head_shape: [output_dim, input_dim]})
        when is_integer(output_dim) and is_integer(input_dim),
@@ -406,6 +516,30 @@ defmodule Trinity.SingleNode.RuntimeSupervisor do
     do: Keyword.get(opts, :coordination_run_ref, "coordination-run:single-node")
 
   defp generated_ref(prefix), do: "#{prefix}:#{System.unique_integer([:positive])}"
+
+  defp backend_identity(%RuntimeAdapter{} = runtime, profile) do
+    %{
+      runtime_profile: profile,
+      instance_id: struct_field(runtime.instance, :instance_id),
+      backend: struct_field(runtime.instance, :backend),
+      adapter_ref: struct_field(runtime.adapter, :adapter_ref)
+    }
+  end
+
+  defp normalize_path(nil), do: nil
+  defp normalize_path(path) when is_binary(path), do: Path.expand(path)
+  defp normalize_path(path), do: path
+
+  defp struct_field(nil, _key), do: nil
+
+  defp struct_field(%_{} = struct, key) do
+    struct
+    |> Map.from_struct()
+    |> Map.get(key)
+  end
+
+  defp struct_field(map, key) when is_map(map), do: Map.get(map, key)
+  defp struct_field(_value, _key), do: nil
 
   defp normalize_opts(opts) when is_list(opts), do: opts
   defp normalize_opts(opts) when is_map(opts), do: Map.to_list(opts)

@@ -27,6 +27,7 @@ defmodule Trinity.Ops.NativeTasks do
   alias Trinity.Crucible.TraceAdapter
   alias Trinity.Ops.CommandSpec
   alias Trinity.Ops.EvalMetadata
+  alias Trinity.RefSanitizer
   alias Trinity.SingleNode.Config
 
   alias Trinity.SakanaPipeline.{
@@ -250,43 +251,12 @@ defmodule Trinity.Ops.NativeTasks do
     name
     |> to_string()
     |> String.trim()
-    |> sanitize_ref_fragment(&artifact_name_char?/1)
-    |> String.trim("_")
+    |> RefSanitizer.safe_fragment(allow_colon?: false, trim?: true)
     |> case do
       "" -> "command"
       safe -> safe
     end
   end
-
-  defp artifact_name_char?(<<char::utf8>>) do
-    ascii_letter?(char) or ascii_digit?(char) or char in [45, 46, 95]
-  end
-
-  defp artifact_name_char?(_char), do: false
-
-  defp sanitize_ref_fragment(value, allowed?) do
-    value
-    |> String.graphemes()
-    |> Enum.map_join(fn char ->
-      if allowed?.(char), do: char, else: "_"
-    end)
-    |> collapse_underscores()
-  end
-
-  defp ascii_letter?(char), do: char in ?A..?Z or char in ?a..?z
-  defp ascii_digit?(char), do: char in ?0..?9
-
-  defp collapse_underscores(value), do: collapse_underscores(value, "", false)
-
-  defp collapse_underscores("", acc, _previous?), do: acc
-
-  defp collapse_underscores("_" <> rest, acc, true), do: collapse_underscores(rest, acc, true)
-
-  defp collapse_underscores("_" <> rest, acc, false),
-    do: collapse_underscores(rest, acc <> "_", true)
-
-  defp collapse_underscores(<<char::utf8, rest::binary>>, acc, _previous?),
-    do: collapse_underscores(rest, acc <> <<char::utf8>>, false)
 
   defp route_demo(opts) do
     start_app!()
@@ -487,7 +457,7 @@ defmodule Trinity.Ops.NativeTasks do
     banner("TRINITY CRUCIBLE MATRIX EVAL")
     kv("Runtime profile", runtime_profile)
     kv("Eval mode", metadata.eval_mode)
-    kv("Qwen runtime", if(metadata.qwen_loaded?, do: "loaded", else: "not loaded"))
+    kv("Qwen/Sakana artifact", if(metadata.qwen_route_ready?, do: "ready", else: "not ready"))
     kv("Acceptance level", metadata.acceptance_level)
     kv("Snapshot policy", metadata.snapshot_policy)
     kv("Cases", length(cases))
@@ -626,7 +596,7 @@ defmodule Trinity.Ops.NativeTasks do
     TRINITY Crucible Matrix Eval
       runtime profile: #{metadata.runtime_profile}
       eval mode: #{metadata.eval_mode}
-      Qwen runtime loaded: #{metadata.qwen_loaded?}
+      Qwen/Sakana artifact ready: #{metadata.qwen_route_ready?}
       acceptance level: #{metadata.acceptance_level}
       snapshot policy: #{metadata.snapshot_policy}
       cases: #{metrics.total}

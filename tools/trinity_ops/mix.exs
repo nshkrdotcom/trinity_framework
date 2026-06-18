@@ -40,6 +40,7 @@ defmodule Trinity.Ops.MixProject do
 
   defp deps do
     [
+      {:trinity_contracts, path: "../../core/trinity_contracts"},
       {:trinity_single_node, path: "../../apps/trinity_single_node"},
       {:trinity_coordinator_core, path: "../../core/trinity_coordinator_core"},
       {:trinity_sakana_pipeline, path: "../../core/trinity_sakana_pipeline"},

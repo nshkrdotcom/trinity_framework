@@ -1,0 +1,11 @@
+{
+  "artifact_layout": "test_fixture",
+  "artifact_version": 1,
+  "base_model_repo": "Qwen/Qwen3-0.6B",
+  "router_head_artifact": "router_head.safetensors",
+  "router_head_shape": [10, 1024],
+  "scale_offset_count": 1024,
+  "selected_tensor_count": 1,
+  "source_vector_shape": [11264],
+  "status": "complete"
+}

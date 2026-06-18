@@ -3,36 +3,77 @@ defmodule Trinity.SingleNode.ArtifactIdentityTest do
 
   alias Trinity.SingleNode.ArtifactIdentity
 
+  @fixture_artifact_root Path.expand("../../fixtures/artifacts/qwen_sakana_tiny", __DIR__)
+
   @default_artifact_root Path.expand(
                            "../../../../../priv/sakana_trinity/adapted_qwen3_0_6b_layer26",
                            __DIR__
                          )
 
-  test "default Qwen artifact identity comes from manifest and pin" do
-    identity = ArtifactIdentity.resolve(:cuda_exla, @default_artifact_root)
+  test "fixture Qwen/Sakana artifact identity verifies manifest pin" do
+    identity = ArtifactIdentity.resolve(:cuda_exla, @fixture_artifact_root)
+    actual_sha = sha256_file(Path.join(@fixture_artifact_root, "manifest.json"))
 
     assert identity.artifact_status == :available
-    assert identity.qwen_loaded? == true
+    assert identity.artifact_status_reason == nil
+    assert identity.artifact_available? == true
+    assert identity.artifact_pin_verified? == true
+    assert identity.qwen_base_model? == true
+    assert identity.sakana_route_artifact? == true
+    assert identity.qwen_loaded? == false
+    assert ArtifactIdentity.qwen_route_ready?(identity) == true
+
     assert identity.adapter_id == :trinity_qwen3_0_6b_sakana
     assert identity.model_id == "Qwen/Qwen3-0.6B"
-    assert identity.artifact_ref == "artifact:qwen3-0.6b-sakana"
-    assert identity.artifact_repo == "nshkrdotcom/trinity-coordinator-adapted-qwen3-0.6b"
-    assert identity.artifact_revision == "v1.0.0"
-
-    assert identity.artifact_manifest_sha256 ==
-             "2a1476a4d2c7b66633232a564114dfb7ebe46f6bea624fc9ae9123678cafcbb9"
-
+    assert identity.artifact_ref == "artifact:example_qwen-sakana-tiny:fixture-v1:79836c21c7df"
+    assert identity.artifact_repo == "example/qwen-sakana-tiny"
+    assert identity.artifact_revision == "fixture-v1"
+    assert identity.artifact_manifest_sha256 == actual_sha
+    assert identity.artifact_manifest_sha256_actual == actual_sha
+    assert identity.artifact_pin_manifest_sha256 == actual_sha
+    assert identity.artifact_pin_path == Path.join(@fixture_artifact_root, "artifact_pin.json")
     assert identity.router_head_shape == [10, 1024]
-    assert identity.selected_tensor_count == 9
-    assert identity.scale_offset_count == 9216
-    assert identity.source_vector_shape == [19_456]
+    assert identity.selected_tensor_count == 1
+    assert identity.scale_offset_count == 1024
+    assert identity.source_vector_shape == [11_264]
   end
 
-  test "custom artifact root uses actual manifest and sibling pin values" do
+  @tag :qwen_artifact
+  test "real default Qwen artifact identity is canonical when generated bundle is present" do
+    manifest_path = Path.join(@default_artifact_root, "manifest.json")
+
+    if File.regular?(manifest_path) do
+      identity = ArtifactIdentity.resolve(:cuda_exla, @default_artifact_root)
+
+      assert identity.artifact_status == :available
+      assert identity.artifact_pin_verified? == true
+      assert identity.qwen_base_model? == true
+      assert identity.sakana_route_artifact? == true
+      assert ArtifactIdentity.qwen_route_ready?(identity) == true
+      assert identity.adapter_id == :trinity_qwen3_0_6b_sakana
+      assert identity.model_id == "Qwen/Qwen3-0.6B"
+      assert identity.artifact_ref == "artifact:qwen3-0.6b-sakana"
+      assert identity.artifact_repo == "nshkrdotcom/trinity-coordinator-adapted-qwen3-0.6b"
+      assert identity.artifact_revision == "v1.0.0"
+      assert identity.artifact_manifest_sha256 == sha256_file(manifest_path)
+      assert identity.artifact_manifest_sha256_actual == sha256_file(manifest_path)
+      assert identity.artifact_pin_manifest_sha256 == sha256_file(manifest_path)
+      assert identity.router_head_shape == [10, 1024]
+      assert identity.selected_tensor_count == 9
+      assert identity.scale_offset_count == 9216
+      assert identity.source_vector_shape == [19_456]
+    else
+      assert true
+    end
+  end
+
+  test "custom artifact root reports pin mismatch without trusting pin sha" do
     root = Path.join(tmp_dir("custom-artifact"), "custom-artifact")
     File.mkdir_p!(root)
 
-    write_json!(Path.join(root, "manifest.json"), %{
+    manifest_path = Path.join(root, "manifest.json")
+
+    write_json!(manifest_path, %{
       "base_model_repo" => "example/non-qwen-router",
       "router_head_shape" => [4, 16],
       "selected_tensor_count" => 2,
@@ -40,22 +81,38 @@ defmodule Trinity.SingleNode.ArtifactIdentityTest do
       "source_vector_shape" => [76]
     })
 
+    pin_sha = String.duplicate("b", 64)
+
     write_json!(Path.join(Path.dirname(root), "artifact_pin.json"), %{
       "repo_id" => "example/custom-artifact",
       "revision" => "custom-v2",
-      "manifest_sha256" => String.duplicate("b", 64)
+      "manifest_sha256" => pin_sha
     })
 
     identity = ArtifactIdentity.resolve(:custom, root)
+    actual_sha = sha256_file(manifest_path)
 
-    assert identity.artifact_status == :available
+    assert identity.artifact_status == :pin_mismatch
+
+    assert identity.artifact_status_reason ==
+             "artifact pin manifest sha256 does not match manifest.json"
+
+    assert identity.artifact_available? == false
+    assert identity.artifact_pin_verified? == false
+    assert identity.qwen_base_model? == false
+    assert identity.sakana_route_artifact? == false
     assert identity.qwen_loaded? == false
     assert identity.adapter_id == nil
     assert identity.model_id == "example/non-qwen-router"
-    assert identity.artifact_ref == "artifact:custom-artifact"
+
+    assert identity.artifact_ref ==
+             "artifact:example_custom-artifact:custom-v2:#{String.slice(actual_sha, 0, 12)}"
+
     assert identity.artifact_repo == "example/custom-artifact"
     assert identity.artifact_revision == "custom-v2"
-    assert identity.artifact_manifest_sha256 == String.duplicate("b", 64)
+    assert identity.artifact_manifest_sha256 == actual_sha
+    assert identity.artifact_manifest_sha256_actual == actual_sha
+    assert identity.artifact_pin_manifest_sha256 == pin_sha
     assert identity.router_head_shape == [4, 16]
     assert identity.selected_tensor_count == 2
     assert identity.scale_offset_count == 12
@@ -69,6 +126,11 @@ defmodule Trinity.SingleNode.ArtifactIdentityTest do
     identity = ArtifactIdentity.resolve(:binary, root)
 
     assert identity.artifact_status == :missing
+    assert identity.artifact_status_reason == "manifest.json not found"
+    assert identity.artifact_available? == false
+    assert identity.artifact_pin_verified? == false
+    assert identity.qwen_base_model? == false
+    assert identity.sakana_route_artifact? == false
     assert identity.qwen_loaded? == false
     assert identity.adapter_id == nil
     assert identity.model_id == nil
@@ -76,6 +138,8 @@ defmodule Trinity.SingleNode.ArtifactIdentityTest do
     assert identity.artifact_repo == nil
     assert identity.artifact_revision == nil
     assert identity.artifact_manifest_sha256 == nil
+    assert identity.artifact_manifest_sha256_actual == nil
+    assert identity.artifact_pin_manifest_sha256 == nil
   end
 
   defp tmp_dir(name) do
@@ -87,5 +151,12 @@ defmodule Trinity.SingleNode.ArtifactIdentityTest do
   defp write_json!(path, payload) do
     File.mkdir_p!(Path.dirname(path))
     File.write!(path, Jason.encode!(payload))
+  end
+
+  defp sha256_file(path) do
+    path
+    |> File.read!()
+    |> then(&:crypto.hash(:sha256, &1))
+    |> Base.encode16(case: :lower)
   end
 end
