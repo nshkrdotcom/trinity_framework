@@ -31,7 +31,8 @@ The root project owns the operator-facing assembly:
 - `core/trinity_coordinator_core` owns the coordinator behavior extracted from
   the former monolith.
 - `core/trinity_sakana_contracts` and `core/trinity_sakana_pipeline` own the
-  adapted-Qwen/Sakana artifact contracts, export, import, parity, and trace
+  adapted-Qwen/Sakana artifact contracts, trace-derived fitness schema and
+  scoring, deterministic dataset export, artifact export/import, and parity
   surfaces.
 - `bridges/trinity_bridge_inference`,
   `bridges/trinity_bridge_self_hosted_inference`, and
@@ -220,8 +221,36 @@ mix trinity.sakana.fitness_export \
   --json
 ```
 
-This feature scores and exports evidence only. Training and weight mutation
-remain external. See [Sakana Fitness Export](docs/sakana_fitness_export.md).
+The producer calls `Trinity.Coordinator.Orchestrator.run_loop/2` through the
+existing single-node model runtime and provider bridge. It does not use the
+legacy smoke loop or duplicate routing, verifier, revision, or budget logic.
+Mock mode is deterministic and needs no network, CUDA artifact, or provider
+credential; live provider execution requires explicit `--allow-live`.
+
+Each trace contains route, provider dispatch, verifier, budget, and terminal
+run events. A verifier `revision_count` is cumulative after applying the
+current verifier decision, so a first `revise` event carries `1` and receives
+the revision penalty on that route. Accepted decisions do not increment it.
+
+The exporter streams string-key JSONL and copies a fixed field allowlist. Hash
+content mode is the default; `--content full` is the only mode that can carry
+deliberately captured input content. API keys, authorization, headers, endpoint
+authentication, and raw provider bodies are never fitness fields. Example IDs,
+route-hash digests, dataset digests, and score-v1 labels are deterministic.
+
+The Qwen prompt eval is also a fitness evidence source:
+
+```bash
+cd examples/qwen_router_prompt_eval
+mix run lib/qwen_router_prompt_eval.exs -- \
+  --runtime-profile mock_tiny \
+  --trace-out ../../tmp/sakana_fitness/qwen_eval_trace.jsonl
+```
+
+This feature scores and exports evidence only. External ES owns candidate
+generation, optimization, and weight mutation; the framework resumes ownership
+at router-vector validation, adapted artifact export, parity, eval, and CUDA
+acceptance. See [Sakana Fitness Export](docs/sakana_fitness_export.md).
 
 ## Generate Safetensors
 
@@ -364,6 +393,7 @@ acceptable for sign-off.
 - [Operations And QC](guides/operations_qc.md)
 - [Artifact Distribution](guides/artifact_distribution.md)
 - [Artifacts And Export](guides/artifacts_and_export.md)
+- [Sakana Fitness Export](docs/sakana_fitness_export.md)
 - [Runtime Profiles](guides/runtime_profiles.md)
 - [Evals](guides/evals.md)
 - [Python Parity Reconstruction](guides/python_parity_reconstruction.md)

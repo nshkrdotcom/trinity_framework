@@ -28,6 +28,13 @@ results, budget snapshots, and run completion or failure. Hash content is the
 default; credentials, request headers, provider payloads, and raw prompts are
 not fitness fields.
 
+`verifier_result.revision_count` is the cumulative count after applying that
+decision. A first `revise`/`revised` result therefore records `1`; an accepted
+result leaves the count unchanged. The matching `after_verifier_revision`
+budget snapshot carries the same count. The assembler prefers this
+self-contained verifier value, so the score penalty is assigned to the route
+whose verifier result requested the revision.
+
 ## 2. Export Fitness Examples
 
 ```bash
@@ -79,6 +86,9 @@ to rejected, and `report` maps to unknown.
 7. Run the direct Qwen router eval and CUDA HITL gates.
 
 The fitness exporter does not train, mutate, upload, or publish weights.
+Candidate generation, selection, optimizer state, and mutation policy belong to
+the external trainer. TRINITY resumes ownership when a candidate router vector
+enters artifact export and acceptance gates.
 
 ## Score Formula V1
 

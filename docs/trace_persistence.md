@@ -34,6 +34,12 @@ example by copying a fixed field allowlist. It never merges source payloads,
 headers, credentials, raw provider bodies, or endpoint authentication into the
 dataset.
 
+Verifier event revision counts are cumulative after the current decision is
+applied. For a revision, `verifier_result.revision_count` and the following
+`after_verifier_revision` budget snapshot agree; accepted decisions do not
+increment the counter. Fitness scoring therefore attributes revision cost to
+the route that caused it.
+
 The external PyTorch trace provider is tracked at
 `tools/python/crucible_torch_trace.py`. The framework boundary test scans that
 location and rejects a legacy root-level `python/` provider directory.

@@ -140,6 +140,23 @@ defmodule Trinity.CoordinatorCoreTest do
     end
   end
 
+  defmodule RevisingCaller do
+    @behaviour Trinity.Coordinator.AgentCaller
+
+    @impl true
+    def call(%AgentCallIntent{role_ref: "worker"} = intent, _opts) do
+      {:ok, receipt(intent, "Worker answer: needs revision")}
+    end
+
+    def call(%AgentCallIntent{role_ref: "verifier"} = intent, _opts) do
+      {:ok, receipt(intent, "REVISE: add supporting evidence")}
+    end
+
+    defp receipt(intent, text) do
+      %AgentCallReceipt{intent_ref: intent.intent_ref, status: :ok, metadata: %{text: text}}
+    end
+  end
+
   defmodule TestTraceSink do
     @behaviour Trinity.Coordinator.TraceSink
 
@@ -342,12 +359,40 @@ defmodule Trinity.CoordinatorCoreTest do
     verifier = Enum.find(events, &(&1.event_type == :verifier_result))
     assert verifier.payload.status == :accepted
     assert verifier.payload.safe_status == :accepted
+    assert verifier.payload.revision_count == 0
     assert is_binary(verifier.payload.verifier_response_ref)
 
     run_finished = Enum.find(events, &(&1.event_type == :run_finished))
     assert run_finished.payload.status == :finished
     assert run_finished.payload.provider_calls == 2
     assert run_finished.payload.verifier_revisions == 0
+  end
+
+  test "verifier revise events expose the post-decision revision count" do
+    assert {:ok, _result} =
+             Orchestrator.run_loop([%{role: "user", content: "solve"}],
+               model_runtime: Runtime,
+               model_state: :loaded,
+               agent_caller: RevisingCaller,
+               max_turns: 2,
+               coordination_run_ref: "run:revise-count",
+               trace_sink: TestTraceSink,
+               trace: [test_pid: self()]
+             )
+
+    events = collect_trace_events([])
+    verifier = Enum.find(events, &(&1.event_type == :verifier_result))
+
+    revision_snapshot =
+      Enum.find(events, fn event ->
+        event.event_type == :budget_snapshot and
+          event.payload.checkpoint == :after_verifier_revision
+      end)
+
+    assert verifier.payload.status == :revise
+    assert verifier.payload.safe_status == :revised
+    assert verifier.payload.revision_count == 1
+    assert revision_snapshot.payload.verifier_revisions == 1
   end
 
   test "orchestrator emits run_failed with budget counters" do

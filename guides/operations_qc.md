@@ -24,9 +24,42 @@ mix trinity.env.check
 mix help --search trinity
 ```
 
-`mix help --search trinity` must list 20 commands, including
-`mix trinity.crucible.inspect`, `mix trinity.crucible.matrix_eval`, and
-`mix trinity.eval`.
+`mix help --search trinity` must list 23 commands, including
+`mix trinity.crucible.inspect`, `mix trinity.crucible.matrix_eval`,
+`mix trinity.eval`, `mix trinity.orchestrator.demo`, and
+`mix trinity.sakana.fitness_export`.
+
+## Fitness Export Smoke
+
+```bash
+mix trinity.orchestrator.demo \
+  --mock-provider \
+  --runtime-profile mock_tiny \
+  --max-turns 1 \
+  --trace-out tmp/sakana_fitness_smoke/orchestrator.jsonl
+
+mix trinity.sakana.fitness_export \
+  --trace tmp/sakana_fitness_smoke/orchestrator.jsonl \
+  --out tmp/sakana_fitness_smoke/fitness.jsonl \
+  --manifest-out tmp/sakana_fitness_smoke/manifest.json \
+  --json
+
+test -s tmp/sakana_fitness_smoke/fitness.jsonl
+test -s tmp/sakana_fitness_smoke/manifest.json
+```
+
+The mock smoke must not require a network, CUDA, an artifact fetch, or provider
+credentials. JSON mode must print only one machine-readable summary. A first
+verifier revision must be recorded as `revision_count: 1`, with the matching
+budget snapshot reporting one verifier revision.
+
+No-CUDA Sakana checks:
+
+```bash
+mix trinity.sakana.export_adapted --dry-run --json
+mix trinity.sakana.parity_sample --semantic-only --no-cuda
+mix trinity.sakana.large_tensor_chunks --no-cuda
+```
 
 ## Package Gates
 

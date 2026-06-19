@@ -55,6 +55,25 @@ mix trinity.route.demo --mock-provider --runtime-profile mock_tiny --max-turns 1
 mix trinity.hitl.mock_loop --runtime-profile mock_tiny --max-turns 1
 ```
 
+The legacy route and HITL smoke commands prove compatibility paths. Use the
+Orchestrator command when producing verifier/budget evidence for fitness:
+
+```bash
+mix trinity.orchestrator.demo \
+  --mock-provider \
+  --runtime-profile mock_tiny \
+  --max-turns 1 \
+  --trace-out tmp/onboarding/orchestrator.jsonl
+
+mix trinity.sakana.fitness_export \
+  --trace tmp/onboarding/orchestrator.jsonl \
+  --out tmp/onboarding/fitness.jsonl \
+  --manifest-out tmp/onboarding/manifest.json
+```
+
+This local path is deterministic and does not require CUDA, a downloaded Qwen
+artifact, provider credentials, or network access.
+
 CUDA checks:
 
 ```bash
@@ -87,3 +106,4 @@ margins, transcript-stable fields, and deterministic route hashes in-process.
 - Standalone runtime: `apps/trinity_single_node`
 - Operator tasks: `tools/trinity_ops`
 - Prompt eval: `examples/qwen_router_prompt_eval`
+- Fitness export reference: `docs/sakana_fitness_export.md`

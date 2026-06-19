@@ -61,6 +61,10 @@ framework root with `mix trinity.sakana.fitness_export`; eval `ok`, `fail`, and
 `report` statuses map to accepted, rejected, and unknown outcomes during
 assembly.
 
+The trace writer emits two records per case and keeps determinism replays on the
+same case identity. Mock-profile cases are report-only evidence; CUDA Qwen
+snapshot acceptance remains the release-grade route proof.
+
 ## Debug Native Logs
 
 ```bash

@@ -37,6 +37,20 @@ An external ES trainer consumes that dataset and produces a new
 adapted export, parity, and eval gates below. Fitness export itself never
 changes weights.
 
+The dataset handoff is schema-versioned and digest-bearing. Default hash mode
+omits raw prompt content, and the assembler copies only route, dispatch,
+verifier, budget, artifact, and runtime fields required by the score contract.
+Use `--content full` only for an explicitly governed dataset that is permitted
+to retain input messages.
+
+Before accepting an externally trained vector:
+
+1. Review the fitness manifest, skipped/conflict report, and dataset digest.
+2. Place the candidate vector at the explicit `--source-vector` path.
+3. Export the adapted bundle without overwriting the current accepted bundle.
+4. Run semantic parity and large-tensor checks.
+5. Run the 37-case direct Qwen eval and all CUDA HITL gates.
+
 ## Export Adapted Safetensors
 
 Full export:

@@ -238,10 +238,7 @@ defmodule Trinity.Coordinator.Orchestrator do
          turn
        ) do
     parsed = Verifier.parse(response_text)
-
-    with :ok <- emit_verifier_result(run_ctx, route, parsed, response_text, turn) do
-      handle_verifier_status(parsed, response_text, loop_state, run_ctx, turn)
-    end
+    handle_verifier_status(parsed, response_text, loop_state, run_ctx, route, turn)
   end
 
   defp handle_role_response(%{role_atom: :thinker}, response_text, loop_state, _run_ctx, _turn) do
@@ -261,13 +258,25 @@ defmodule Trinity.Coordinator.Orchestrator do
   defp handle_role_response(_route, _response_text, loop_state, _run_ctx, _turn),
     do: {:cont, loop_state}
 
-  defp handle_verifier_status(parsed, response_text, loop_state, run_ctx, turn) do
+  defp handle_verifier_status(parsed, response_text, loop_state, run_ctx, route, turn) do
     if Verifier.safe_status(parsed) == :accepted do
-      {:halt, response_text}
-    else
-      case bump_verifier_revision(run_ctx, turn) do
-        :ok -> {:cont, loop_state}
+      case emit_verifier_result(run_ctx, route, parsed, response_text, turn) do
+        :ok -> {:halt, response_text}
         {:error, reason} -> {:error, reason}
+      end
+    else
+      budget_result =
+        Budgets.bump_verifier_revision(run_ctx.budget_context, %{turn: turn})
+
+      with :ok <- emit_verifier_result(run_ctx, route, parsed, response_text, turn),
+           :ok <-
+             trace_budget_result(
+               budget_result,
+               run_ctx,
+               :after_verifier_revision,
+               %{turn: turn}
+             ) do
+        {:cont, loop_state}
       end
     end
   end
@@ -334,12 +343,6 @@ defmodule Trinity.Coordinator.Orchestrator do
       turn: turn,
       observed_latency_ms: latency_ms
     })
-  end
-
-  defp bump_verifier_revision(run_ctx, turn) do
-    run_ctx.budget_context
-    |> Budgets.bump_verifier_revision(%{turn: turn})
-    |> trace_budget_result(run_ctx, :after_verifier_revision, %{turn: turn})
   end
 
   defp trace_budget_result(:ok, run_ctx, checkpoint, extras) do

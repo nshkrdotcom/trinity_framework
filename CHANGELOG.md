@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add Orchestrator-backed lifecycle traces and deterministic, allowlisted
   Sakana fitness dataset export for external router evolution.
+- Define verifier trace revision counts as post-decision cumulative state so
+  fitness penalties are attributed to the route that requested each revision.
 - Make runtime artifact provenance immutable: manifest and pin data are the
   source of truth, identity options are validated as assertions, and
   provenance-shaping runtime options fail closed.

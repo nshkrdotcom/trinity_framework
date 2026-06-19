@@ -15,6 +15,15 @@ assembly are owned here through explicit package boundaries.
 7. Close the route-evidence loop with Orchestrator-backed, allowlisted Sakana
    fitness datasets for external ES training.
 
+## Evolution Boundary
+
+The framework owns evidence production, deterministic fitness assembly and
+scoring, router-vector artifact import/export, parity, and runtime acceptance.
+Candidate generation, optimization, and weight mutation stay in an external ES
+trainer. This boundary keeps training dependencies and mutation policy out of
+the reusable runtime while preserving a schema-versioned handoff in both
+directions.
+
 ## Done Means
 
 - `mix test` runs root aggregate tests.
@@ -26,3 +35,7 @@ assembly are owned here through explicit package boundaries.
 - CUDA/adapted checks are documented and run on capable hosts.
 - `mix trinity.orchestrator.demo` produces verifier/budget-bearing traces and
   `mix trinity.sakana.fitness_export` converts them into deterministic datasets.
+- Verifier revision counts describe state after the current decision, and
+  exported fitness examples contain only allowlisted trace fields.
+- External training can return a reviewed router vector to the existing
+  adapted-export, parity, eval, and CUDA acceptance path.

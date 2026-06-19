@@ -27,9 +27,11 @@ adapter logic stays in the new `crucible_*` packages.
 - `core/trinity_coordinator_core`: orchestrator, budgets, governance,
   role injection, state, thinker, verifier, and route derivation.
 - `core/trinity_sakana_contracts`: Sakana manifest, route hash input, selected
-  tensor, margin, and profile contracts.
-- `core/trinity_sakana_pipeline`: artifact IO, exporter, importer, parity trace,
-  stage check, and large tensor chunk logic.
+  tensor, margin/profile, fitness example/manifest, and deterministic score
+  contracts.
+- `core/trinity_sakana_pipeline`: streaming trace reader, allowlist fitness
+  assembler, JSONL/manifest writer, fitness exporter, artifact IO, adapted
+  exporter/importer, parity trace, stage checks, and large tensor chunk logic.
 - `bridges/trinity_bridge_self_hosted_inference`: model runtime adapter over
   `self_hosted_inference_core` and `self_hosted_inference_bumblebee`.
 - `bridges/trinity_bridge_inference`: provider/agent caller bridge over
@@ -65,3 +67,24 @@ side through public TRINITY contracts and generic projection references.
    `Trinity.Crucible.DecisionAdapter`.
 6. Dispatch through the provider or self-hosted runtime bridge.
 7. Emit trace and decision refs through the trace bridge.
+
+## Fitness Evidence Flow
+
+1. `Trinity.Ops.OrchestratorRunner` loads the existing single-node route runtime
+   and calls `Trinity.Coordinator.Orchestrator.run_loop/2`.
+2. The Orchestrator owns routing, provider dispatch, verifier transitions,
+   revision counters, budget checks, and lifecycle trace events.
+3. The JSONL trace bridge persists route, dispatch, verifier, budget, and
+   terminal events without raw provider response bodies.
+4. `Trinity.Sakana.TraceFitnessReader` streams records without atomizing input
+   keys.
+5. `TraceFitnessAssembler` joins records by run, turn, route hash, and dispatch
+   ref, copying only explicitly allowed fields.
+6. `FitnessScore` applies the schema-versioned deterministic formula and
+   `FitnessJsonlWriter` writes examples plus a digest-bearing manifest.
+7. An external ES trainer consumes the dataset and returns a reviewed router
+   vector. Existing adapted export, parity, eval, and CUDA gates validate it.
+
+Verifier `revision_count` is post-decision cumulative state. This definition
+keeps each route example self-contained and attributes a revision penalty to
+the verifier decision that caused it.
