@@ -201,6 +201,28 @@ The strict snapshot fixture remains owned by the direct example eval command.
 Treat the wrapper report as route/contract acceptance, and the direct example
 snapshot as a separate, provenance-sensitive logits fixture gate.
 
+## Export Sakana Fitness Evidence
+
+Produce fitness-bearing traces through the real coordinator Orchestrator, then
+export an allowlisted dataset for an external ES trainer:
+
+```bash
+mix trinity.orchestrator.demo \
+  --runtime-profile mock_tiny \
+  --mock-provider \
+  --max-turns 3 \
+  --trace-out tmp/orchestrator_demo/trace.jsonl
+
+mix trinity.sakana.fitness_export \
+  --trace tmp/orchestrator_demo/trace.jsonl \
+  --out tmp/sakana_fitness/fitness.jsonl \
+  --manifest-out tmp/sakana_fitness/manifest.json \
+  --json
+```
+
+This feature scores and exports evidence only. Training and weight mutation
+remain external. See [Sakana Fitness Export](docs/sakana_fitness_export.md).
+
 ## Generate Safetensors
 
 The adapted bundle can be regenerated from the Sakana vector and Qwen base
@@ -298,9 +320,11 @@ mix trinity.hitl.gpu                   # GPU/EXLA CUDA visibility check
 mix trinity.hitl.head_route            # Hidden-state to Sakana-head route check
 mix trinity.hitl.mock_loop             # Mock orchestrator loop check
 mix trinity.hitl.vector                # Sakana router-vector split check
+mix trinity.orchestrator.demo          # Produce Orchestrator-backed fitness traces
 mix trinity.parity.check               # Python/Elixir parity comparator wrapper
 mix trinity.route.demo                 # Gated route demo
 mix trinity.sakana.export_adapted      # Export adapted Qwen tensors and router head
+mix trinity.sakana.fitness_export      # Export deterministic route fitness JSONL
 mix trinity.sakana.import_python       # Import Python semantic Sakana artifacts
 mix trinity.sakana.large_tensor_chunks # Replay large tensor stages in chunks
 mix trinity.sakana.parity_sample       # Emit SVD/SVF parity diagnostics

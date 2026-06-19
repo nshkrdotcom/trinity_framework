@@ -10,6 +10,9 @@ storage.
 - `Trinity.Coordinator.TraceEvent` route and provider events.
 - `Trinity.Bridge.Trace.JSONL` and `JsonlSink` for local JSONL output.
 - AITrace-shaped payloads through `trinity_bridge_trace`.
+- Orchestrator lifecycle events used by Sakana fitness export:
+  `route_decision`, dispatch start/finish, `verifier_result`, budget snapshots,
+  and terminal run events.
 
 ## Rules
 
@@ -23,6 +26,13 @@ storage.
    identify and redact them.
 
 Operator commands accept `--trace-out` where route/demo flows emit trace files.
+`mix trinity.orchestrator.demo` is the fitness-bearing producer; the legacy
+smoke loop is not treated as Orchestrator outcome evidence.
+
+`mix trinity.sakana.fitness_export` streams these JSONL records and builds each
+example by copying a fixed field allowlist. It never merges source payloads,
+headers, credentials, raw provider bodies, or endpoint authentication into the
+dataset.
 
 The external PyTorch trace provider is tracked at
 `tools/python/crucible_torch_trace.py`. The framework boundary test scans that

@@ -47,6 +47,20 @@ Only update committed snapshots after reviewing route changes. Stable fields
 include agent id, role id, token count, and transcript hash. Route hash is used
 for in-process determinism and diagnostics.
 
+## Write Fitness Source Traces
+
+```bash
+mix run lib/qwen_router_prompt_eval.exs -- \
+  --runtime-profile mock_tiny \
+  --trace-out ../../tmp/sakana_fitness/qwen_eval_trace.jsonl
+```
+
+This writes `route_decision` and `route_eval_result` records per case while
+leaving snapshot output unchanged. It does not score fitness. Export from the
+framework root with `mix trinity.sakana.fitness_export`; eval `ok`, `fail`, and
+`report` statuses map to accepted, rejected, and unknown outcomes during
+assembly.
+
 ## Debug Native Logs
 
 ```bash

@@ -20,6 +20,23 @@ The generated runtime bundle lands at:
 priv/sakana_trinity/adapted_qwen3_0_6b_layer26
 ```
 
+## Fitness To External ES
+
+```bash
+mix trinity.orchestrator.demo --mock-provider --runtime-profile mock_tiny \
+  --trace-out tmp/sakana_fitness/orchestrator.jsonl
+
+mix trinity.sakana.fitness_export \
+  --trace tmp/sakana_fitness/orchestrator.jsonl \
+  --out tmp/sakana_fitness/fitness.jsonl \
+  --manifest-out tmp/sakana_fitness/manifest.json
+```
+
+An external ES trainer consumes that dataset and produces a new
+`trinity_router_es_vector.safetensors`. The framework then uses the existing
+adapted export, parity, and eval gates below. Fitness export itself never
+changes weights.
+
 ## Export Adapted Safetensors
 
 Full export:
@@ -92,4 +109,3 @@ mix trinity.sakana.parity_sample \
 Strict historical byte reproduction requires the original Python provenance and
 the original SVD weights. The framework release-readiness path is semantic
 import/export plus CUDA route-decision parity.
-

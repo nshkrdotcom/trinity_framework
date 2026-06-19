@@ -51,6 +51,27 @@ defmodule Trinity.Ops.CommandSpec do
           summary_out: :string
         ]
       },
+      trinity_orchestrator_demo: %{
+        task: "trinity.orchestrator.demo",
+        switches: [
+          allow_live: :boolean,
+          artifact_dir: :string,
+          json: :boolean,
+          max_estimated_cost_usd: :float,
+          max_provider_calls: :integer,
+          max_provider_latency_ms: :integer,
+          max_turns: :integer,
+          max_verifier_revisions: :integer,
+          max_wall_time_ms: :integer,
+          message: :string,
+          mock_provider: :boolean,
+          provider_pool: :string,
+          run_id: :string,
+          runtime_profile: :string,
+          trace_content: :string,
+          trace_out: :string
+        ]
+      },
       trinity_hitl_adapted: %{
         task: "trinity.hitl.adapted",
         switches: [
@@ -108,6 +129,27 @@ defmodule Trinity.Ops.CommandSpec do
           svd_compute_type: :string,
           json: :boolean,
           runtime_profile: :string
+        ]
+      },
+      trinity_sakana_fitness_export: %{
+        task: "trinity.sakana.fitness_export",
+        switches: [
+          trace: :keep,
+          out: :string,
+          manifest_out: :string,
+          report_out: :string,
+          format: :string,
+          content: :string,
+          score_formula: :string,
+          margin_mode: :string,
+          margin_scale: :float,
+          latency_target_ms: :integer,
+          cost_target_usd: :float,
+          positive_threshold: :float,
+          negative_threshold: :float,
+          skip_invalid: :boolean,
+          dry_run: :boolean,
+          json: :boolean
         ]
       },
       trinity_sakana_import_python: %{

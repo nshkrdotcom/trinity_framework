@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Add Orchestrator-backed lifecycle traces and deterministic, allowlisted
+  Sakana fitness dataset export for external router evolution.
 - Make runtime artifact provenance immutable: manifest and pin data are the
   source of truth, identity options are validated as assertions, and
   provenance-shaping runtime options fail closed.

@@ -19,9 +19,11 @@ defmodule Trinity.Ops.CommandSpecTest do
     trinity.hitl.head_route
     trinity.hitl.mock_loop
     trinity.hitl.vector
+    trinity.orchestrator.demo
     trinity.parity.check
     trinity.route.demo
     trinity.sakana.export_adapted
+    trinity.sakana.fitness_export
     trinity.sakana.import_python
     trinity.sakana.large_tensor_chunks
     trinity.sakana.parity_sample
@@ -89,6 +91,14 @@ defmodule Trinity.Ops.CommandSpecTest do
       "trace.jsonl"
     ],
     trinity_hitl_vector: [],
+    trinity_orchestrator_demo: [
+      "--runtime-profile",
+      "mock_tiny",
+      "--mock-provider",
+      "--trace-out",
+      "trace.jsonl",
+      "--json"
+    ],
     trinity_parity_check: [
       "--python-report",
       "python.json",
@@ -111,6 +121,14 @@ defmodule Trinity.Ops.CommandSpecTest do
       "f32",
       "--out",
       "tmp/out"
+    ],
+    trinity_sakana_fitness_export: [
+      "--trace",
+      "trace.jsonl",
+      "--out",
+      "fitness.jsonl",
+      "--margin-mode",
+      "profile_floor"
     ],
     trinity_sakana_import_python: [
       "--source-dir",

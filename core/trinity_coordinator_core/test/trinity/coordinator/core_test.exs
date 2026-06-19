@@ -131,6 +131,25 @@ defmodule Trinity.CoordinatorCoreTest do
     end
   end
 
+  defmodule MissingTextCaller do
+    @behaviour Trinity.Coordinator.AgentCaller
+
+    @impl true
+    def call(%AgentCallIntent{} = intent, _opts) do
+      {:ok, %AgentCallReceipt{intent_ref: intent.intent_ref, status: :ok, metadata: %{}}}
+    end
+  end
+
+  defmodule TestTraceSink do
+    @behaviour Trinity.Coordinator.TraceSink
+
+    @impl true
+    def emit(event, opts) do
+      send(Keyword.fetch!(opts, :test_pid), {:trace_event, event})
+      :ok
+    end
+  end
+
   test "state manager normalizes and appends transcript messages" do
     {:ok, pid} = StateManager.start_link([%{"role" => "user", "content" => "hello"}])
     assert StateManager.get_messages(pid) == [%{role: "user", content: "hello"}]
@@ -280,6 +299,100 @@ defmodule Trinity.CoordinatorCoreTest do
     assert Enum.map(result.messages, & &1.role) == ["user", "assistant", "assistant"]
   end
 
+  test "orchestrator emits fitness-bearing lifecycle events" do
+    assert {:ok, _result} =
+             Orchestrator.run_loop([%{role: "user", content: "solve"}],
+               model_runtime: Runtime,
+               model_state: :loaded,
+               agent_caller: Caller,
+               max_turns: 3,
+               coordination_run_ref: "run:trace",
+               trace_ref: "trace:trace",
+               runtime_profile: :mock_tiny,
+               provider_pool: "mock",
+               route_path: :orchestrator,
+               trace_sink: TestTraceSink,
+               trace: [test_pid: self()]
+             )
+
+    events = collect_trace_events([])
+    event_types = Enum.map(events, & &1.event_type)
+
+    assert :route_decision in event_types
+    assert :provider_dispatch_started in event_types
+    assert :provider_dispatch_finished in event_types
+    assert :verifier_result in event_types
+    assert :budget_snapshot in event_types
+    assert :run_finished in event_types
+
+    route = Enum.find(events, &(&1.event_type == :route_decision))
+    assert route.coordination_run_ref == "run:trace"
+    assert route.payload.runtime_profile == :test
+    assert route.payload.provider_pool == "mock"
+    assert route.payload.route_path == :orchestrator
+    assert route.payload.selected_agent_id == 0
+    assert route.payload.selected_role_id == 0
+    assert route.payload.min_margin == 1.0
+
+    finished = Enum.find(events, &(&1.event_type == :provider_dispatch_finished))
+    assert finished.payload.ok == true
+    assert is_integer(finished.payload.latency_ms)
+    refute Map.has_key?(finished.payload, :text)
+
+    verifier = Enum.find(events, &(&1.event_type == :verifier_result))
+    assert verifier.payload.status == :accepted
+    assert verifier.payload.safe_status == :accepted
+    assert is_binary(verifier.payload.verifier_response_ref)
+
+    run_finished = Enum.find(events, &(&1.event_type == :run_finished))
+    assert run_finished.payload.status == :finished
+    assert run_finished.payload.provider_calls == 2
+    assert run_finished.payload.verifier_revisions == 0
+  end
+
+  test "orchestrator emits run_failed with budget counters" do
+    assert {:error, {:budget_exceeded, :provider_calls, _details}} =
+             Orchestrator.run_loop([%{role: "user", content: "loop"}],
+               model_runtime: Runtime,
+               model_state: :loaded,
+               agent_caller: Caller,
+               max_turns: 5,
+               max_provider_calls: 1,
+               coordination_run_ref: "run:failed",
+               trace_sink: TestTraceSink,
+               trace: [test_pid: self()]
+             )
+
+    events = collect_trace_events([])
+    failed = Enum.find(events, &(&1.event_type == :run_failed))
+    assert failed.payload.status == :failed
+    assert failed.payload.provider_calls == 2
+    assert failed.payload.budget_exceeded_key == :provider_calls
+    refute Map.has_key?(failed.payload, :reason)
+  end
+
+  test "orchestrator closes a dispatch span when a receipt has no response text" do
+    assert {:error, :missing_agent_response_text} =
+             Orchestrator.run_loop([%{role: "user", content: "solve"}],
+               model_runtime: Runtime,
+               model_state: :loaded,
+               agent_caller: MissingTextCaller,
+               max_turns: 1,
+               coordination_run_ref: "run:missing-text",
+               trace_sink: TestTraceSink,
+               trace: [test_pid: self()]
+             )
+
+    events = collect_trace_events([])
+    started = Enum.find(events, &(&1.event_type == :provider_dispatch_started))
+    finished = Enum.find(events, &(&1.event_type == :provider_dispatch_finished))
+
+    assert finished.payload.dispatch_ref == started.payload.dispatch_ref
+    assert finished.payload.ok == false
+    assert is_binary(finished.payload.error_ref)
+    assert Enum.any?(events, &(&1.event_type == :run_failed))
+  end
+
   test "orchestrator consumes Crucible policy route decisions" do
     assert {:ok, result} =
              Orchestrator.run_loop([%{role: "user", content: "solve"}],
@@ -328,5 +441,13 @@ defmodule Trinity.CoordinatorCoreTest do
              )
 
     assert latency.observed_ms >= 1
+  end
+
+  defp collect_trace_events(acc) do
+    receive do
+      {:trace_event, event} -> collect_trace_events([event | acc])
+    after
+      0 -> Enum.reverse(acc)
+    end
   end
 end

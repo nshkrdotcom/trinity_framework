@@ -12,6 +12,14 @@ The adapted artifact bundle is generated or fetched outside git and verified by
 
 ## Generate
 
+Generate or select a router vector through the external evolution loop first:
+
+1. Produce traces with `mix trinity.orchestrator.demo` or Qwen eval
+   `--trace-out`.
+2. Run `mix trinity.sakana.fitness_export`.
+3. Train externally and place the reviewed vector at
+   `priv/sakana_trinity/artifacts/trinity_router_es_vector.safetensors`.
+
 ```bash
 XLA_TARGET=cuda12 mix trinity.sakana.export_adapted \
   --out priv/sakana_trinity/adapted_qwen3_0_6b_layer26 \

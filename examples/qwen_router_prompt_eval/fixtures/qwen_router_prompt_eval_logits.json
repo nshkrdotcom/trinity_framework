@@ -771,26 +771,26 @@
     {
       "agent_id": 0,
       "agent_logits_rounded": [
-        32.189281,
-        19.318577,
-        -7.990181,
-        -10.237064,
-        23.060102,
-        -33.038315,
-        0.449813
+        31.766966,
+        20.079359,
+        -8.367147,
+        -10.051938,
+        22.155956,
+        -32.994999,
+        0.229463
       ],
-      "agent_margin": 9.129179000854492,
+      "agent_margin": 9.61100959777832,
       "id": "strategic_tradeoff",
       "role_id": 0,
       "role_logits_rounded": [
-        4.492024,
-        -5.506483,
-        -0.830496
+        4.634431,
+        -5.764873,
+        -0.89264
       ],
-      "role_margin": 5.3225202560424805,
-      "route_hash": "11a3f1891775365c68b476aaf372f73c2b65b1495c359415267c0f7fa532f403",
+      "role_margin": 5.527070879936218,
+      "route_hash": "57213fc4dfbca2869a167ec9731406b6213ef6b4891b910cb57fa111be5d0f56",
       "token_count": 20,
-      "transcript_hash": "d55338bdd7901f5e118cf3563bbd4fad64bb7ffb000466d99349ac9c638ed2f5"
+      "transcript_hash": "c8c77c77e2b8cb4716253731082fdab114108588362c01b1707ef0eaba1cf65b"
     },
     {
       "agent_id": 0,

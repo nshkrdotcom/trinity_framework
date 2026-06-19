@@ -18,9 +18,11 @@ defmodule TrinityFrameworkRootTest do
     trinity.hitl.head_route
     trinity.hitl.mock_loop
     trinity.hitl.vector
+    trinity.orchestrator.demo
     trinity.parity.check
     trinity.route.demo
     trinity.sakana.export_adapted
+    trinity.sakana.fitness_export
     trinity.sakana.import_python
     trinity.sakana.large_tensor_chunks
     trinity.sakana.parity_sample
@@ -53,6 +55,7 @@ defmodule TrinityFrameworkRootTest do
     docs/production_runbook.md
     docs/provider_smoke_tests.md
     docs/sakana_adapted_artifact_plan.md
+    docs/sakana_fitness_export.md
     docs/sakana_svd_byte_match_rigor_plan.md
     docs/sakana_svd_parity_debug_checklist.md
     docs/trace_persistence.md
@@ -139,10 +142,17 @@ defmodule TrinityFrameworkRootTest do
       Trinity.Sakana.Manifest,
       Trinity.Sakana.RouterHeadSpec,
       Trinity.Sakana.SnapshotFixture,
+      Trinity.Sakana.FitnessExample,
+      Trinity.Sakana.FitnessManifest,
+      Trinity.Sakana.FitnessScore,
       Trinity.SakanaPipeline.ArtifactIO,
       Trinity.SakanaPipeline.Exporter,
       Trinity.SakanaPipeline.PythonImporter,
       Trinity.SakanaPipeline.LargeTensorChunks,
+      Trinity.Sakana.TraceFitnessReader,
+      Trinity.Sakana.TraceFitnessAssembler,
+      Trinity.Sakana.FitnessJsonlWriter,
+      Trinity.Sakana.FitnessExporter,
       # Bridges and app runtime.
       Trinity.Bridge.Inference.AgentCaller,
       Trinity.Bridge.Inference.ProviderPool,
@@ -156,6 +166,7 @@ defmodule TrinityFrameworkRootTest do
       Trinity.Ops.Tasks,
       Trinity.Ops.Gates,
       Trinity.Ops.NativeTasks,
+      Trinity.Ops.OrchestratorRunner,
       Trinity.Examples.QwenRouterPromptEval.SnapshotResolver,
       Trinity.Examples.CrucibleRoute
     ]
@@ -203,6 +214,8 @@ defmodule TrinityFrameworkRootTest do
       {:trinity_hitl_mock_loop,
        ["--runtime-profile", "mock_tiny", "--max-turns", "1", "--trace-out", "tmp/mock.jsonl"]},
       {:trinity_hitl_vector, []},
+      {:trinity_orchestrator_demo,
+       ["--runtime-profile", "mock_tiny", "--mock-provider", "--trace-out", "tmp/o.jsonl"]},
       {:trinity_parity_check,
        [
          "--python-report",
@@ -225,6 +238,8 @@ defmodule TrinityFrameworkRootTest do
          "--runtime-profile",
          "mock_tiny"
        ]},
+      {:trinity_sakana_fitness_export,
+       ["--trace", "tmp/trace.jsonl", "--out", "tmp/fitness.jsonl"]},
       {:trinity_sakana_import_python,
        [
          "--source-dir",

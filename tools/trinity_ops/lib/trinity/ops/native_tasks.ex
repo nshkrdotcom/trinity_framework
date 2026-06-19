@@ -1318,8 +1318,7 @@ defmodule Trinity.Ops.NativeTasks do
   defp sakana_large_tensor_chunks(opts) do
     start_app!()
 
-    python_report_path =
-      Keyword.get(opts, :python_report) || Mix.raise("--python-report is required")
+    python_report_path = Keyword.get(opts, :python_report, default_reference_manifest_path())
 
     out = Keyword.get(opts, :out, @default_large_tensor_out)
     chunk_rows = Keyword.get(opts, :chunk_rows, LargeTensorChunks.default_chunk_rows())

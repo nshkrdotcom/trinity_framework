@@ -66,6 +66,7 @@ defmodule TrinityFramework.Build.WeldContract do
     "docs/sakana_adapted_artifact_plan.md",
     "docs/sakana_svd_byte_match_rigor_plan.md",
     "docs/sakana_svd_parity_debug_checklist.md",
+    "docs/sakana_fitness_export.md",
     "docs/trace_persistence.md"
   ]
 

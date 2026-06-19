@@ -378,6 +378,21 @@ defmodule Trinity.Ops.NativeTasksTest do
     assert %{"summary" => %{"chunk_count" => 2}} = Jason.decode!(File.read!(out))
   end
 
+  test "large tensor chunks defaults to the canonical Python reference manifest" do
+    out = tmp_path("default_large_chunks.json")
+
+    assert :ok =
+             Tasks.run(:trinity_sakana_large_tensor_chunks, [
+               "--out",
+               out,
+               "--no-cuda"
+             ])
+
+    report = Jason.decode!(File.read!(out))
+    assert report["inputs"]["python_report"] =~ "sakana_python_reference_manifest.json"
+    assert is_integer(report["summary"]["chunk_count"])
+  end
+
   defp trace_events(path) do
     path
     |> File.read!()

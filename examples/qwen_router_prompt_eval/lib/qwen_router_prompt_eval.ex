@@ -6,7 +6,8 @@ defmodule Trinity.Examples.QwenRouterPromptEval do
   require Logger
 
   alias SelfHostedInferenceBumblebee.Runtime.Profile
-  alias Trinity.Coordinator.RoleInjector
+  alias Trinity.Bridge.Trace.JsonlSink
+  alias Trinity.Coordinator.{RoleInjector, TraceEvent}
   alias Trinity.Examples.QwenRouterPromptEval.SnapshotResolver
   alias Trinity.SingleNode
 
@@ -49,6 +50,7 @@ defmodule Trinity.Examples.QwenRouterPromptEval do
           show_logits: :boolean,
           snapshot: :string,
           snapshot_out: :string,
+          trace_out: :string,
           suppress_native_logs_child: :boolean,
           verbose: :boolean
         ]
@@ -126,10 +128,11 @@ defmodule Trinity.Examples.QwenRouterPromptEval do
 
     cases = select_cases!(Keyword.get_values(opts, :case))
     snapshot = snapshot(profile, Keyword.get(opts, :snapshot))
-    assert? = not Keyword.get(opts, :no_assert, false)
+    assert? = profile != :mock_tiny and not Keyword.get(opts, :no_assert, false)
     show_logits? = Keyword.get(opts, :show_logits, false)
     verbose? = Keyword.get(opts, :verbose, false) or show_logits?
     determinism_runs = max(1, Keyword.get(opts, :determinism_runs, 1))
+    prepare_trace_out(Keyword.get(opts, :trace_out))
 
     {:ok, runtime} =
       SingleNode.load_runtime(
@@ -177,6 +180,7 @@ defmodule Trinity.Examples.QwenRouterPromptEval do
       end
 
     if path = Keyword.get(opts, :snapshot_out), do: write_snapshot!(results, path)
+    if path = Keyword.get(opts, :trace_out), do: write_trace!(results, path, profile)
 
     failures =
       Enum.filter(results, &(&1.status == :fail)) ++
@@ -195,7 +199,9 @@ defmodule Trinity.Examples.QwenRouterPromptEval do
       SingleNode.route(case_spec.messages,
         runtime: runtime,
         runtime_profile: opts[:profile],
-        artifact_root: opts[:artifact_dir]
+        artifact_root: opts[:artifact_dir],
+        trace_ref: "qwen-router-prompt-eval:#{case_spec.id}",
+        coordination_run_ref: "qwen-router-prompt-eval:#{case_spec.id}"
       )
 
     decision = result.decision
@@ -219,6 +225,8 @@ defmodule Trinity.Examples.QwenRouterPromptEval do
     %{
       id: case_spec.id,
       status: status,
+      expected_role_id: expected.role_id,
+      expected_agent_id: expected.agent_id,
       role_id: decision.selected_role_id,
       agent_id: decision.selected_agent_id,
       agent_margin: agent_margin,
@@ -227,9 +235,90 @@ defmodule Trinity.Examples.QwenRouterPromptEval do
       role_logits_rounded: Enum.map(logits.role_logits || [], &Float.round(&1, 6)),
       token_count: decision.token_count,
       transcript_hash: decision.transcript_hash,
-      route_hash: decision.route_hash
+      route_hash: decision.route_hash,
+      confidence_band: decision.confidence_band,
+      role_name: decision.role_name,
+      runtime_profile: decision.runtime_profile,
+      artifact_identity: decision.artifact_identity
     }
   end
+
+  defp prepare_trace_out(nil), do: :ok
+
+  defp prepare_trace_out(path) when is_binary(path) do
+    File.mkdir_p!(Path.dirname(path))
+    File.rm(path)
+    :ok
+  end
+
+  defp write_trace!(results, path, profile) do
+    Enum.each(results, fn result ->
+      run_ref = "qwen-router-prompt-eval:#{result.id}"
+      identity = result.artifact_identity || %{}
+
+      route_payload = %{
+        turn: 0,
+        case_id: result.id,
+        selected_agent_id: result.agent_id,
+        selected_role_id: result.role_id,
+        role_name: result.role_name,
+        agent_margin: result.agent_margin,
+        role_margin: result.role_margin,
+        min_margin: min(result.agent_margin, result.role_margin),
+        confidence_band: result.confidence_band,
+        token_count: result.token_count,
+        transcript_hash: result.transcript_hash,
+        input_hash: result.transcript_hash,
+        route_hash: result.route_hash,
+        runtime_profile: result.runtime_profile || profile,
+        provider_pool: nil,
+        route_path: :qwen_router_prompt_eval,
+        artifact_ref: identity_field(identity, :artifact_ref),
+        artifact_revision: identity_field(identity, :artifact_revision),
+        artifact_hash_ref:
+          identity_field(identity, :artifact_manifest_sha256_actual) ||
+            identity_field(identity, :artifact_manifest_sha256)
+      }
+
+      eval_payload = %{
+        turn: 0,
+        case_id: result.id,
+        expected_agent_id: result.expected_agent_id,
+        expected_role_id: result.expected_role_id,
+        actual_agent_id: result.agent_id,
+        actual_role_id: result.role_id,
+        status: result.status,
+        agent_margin: result.agent_margin,
+        role_margin: result.role_margin,
+        token_count: result.token_count,
+        transcript_hash: result.transcript_hash,
+        route_hash: result.route_hash
+      }
+
+      :ok = emit_trace_event(path, run_ref, :route_decision, route_payload)
+      :ok = emit_trace_event(path, run_ref, :route_eval_result, eval_payload)
+    end)
+
+    :ok
+  end
+
+  defp emit_trace_event(path, run_ref, event_type, payload) do
+    JsonlSink.emit(
+      %TraceEvent{
+        event_ref: "trace-event:#{event_type}:#{run_ref}",
+        event_type: event_type,
+        trace_ref: run_ref,
+        coordination_run_ref: run_ref,
+        payload: payload
+      },
+      path: path,
+      content: :hash,
+      include_refs: true
+    )
+  end
+
+  defp identity_field(identity, key) when is_map(identity),
+    do: Map.get(identity, key, Map.get(identity, Atom.to_string(key)))
 
   defp route_status(id, decision, expected, opts) do
     if Keyword.fetch!(opts, :assert?) do
@@ -263,11 +352,15 @@ defmodule Trinity.Examples.QwenRouterPromptEval do
   end
 
   defp determinism_mismatch(runtime, baseline, run_index, opts, case_spec, acc) do
+    run_ref = "qwen-router-prompt-eval:#{case_spec.id}"
+
     {:ok, result} =
       SingleNode.route(case_spec.messages,
         runtime: runtime,
         runtime_profile: opts[:profile],
-        artifact_root: opts[:artifact_dir]
+        artifact_root: opts[:artifact_dir],
+        trace_ref: run_ref,
+        coordination_run_ref: run_ref
       )
 
     if baseline[case_spec.id] == result.decision.route_hash do

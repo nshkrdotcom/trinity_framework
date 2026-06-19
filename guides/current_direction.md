@@ -12,13 +12,17 @@ assembly are owned here through explicit package boundaries.
 4. Keep artifact, eval, parity, and docs gates runnable from a fresh checkout.
 5. Publish deconstructed packages through governed dependency manifests.
 6. Expose Crucible as the reusable route path without hard-wiring it to Qwen.
+7. Close the route-evidence loop with Orchestrator-backed, allowlisted Sakana
+   fitness datasets for external ES training.
 
 ## Done Means
 
 - `mix test` runs root aggregate tests.
 - `mix ci` is clean.
-- `mix help --search trinity` lists all 20 operator tasks.
+- `mix help --search trinity` lists the complete operator task surface.
 - The 37-case Qwen router eval is documented and runnable.
 - `mix trinity.eval qwen_router_prompt_eval` passes strict
   route-decision acceptance.
 - CUDA/adapted checks are documented and run on capable hosts.
+- `mix trinity.orchestrator.demo` produces verifier/budget-bearing traces and
+  `mix trinity.sakana.fitness_export` converts them into deterministic datasets.

@@ -40,6 +40,7 @@ defmodule Trinity.Examples.QwenRouterPromptEval.MixProject do
       {:trinity_sakana_contracts, path: "../../core/trinity_sakana_contracts"},
       {:trinity_bridge_self_hosted_inference,
        path: "../../bridges/trinity_bridge_self_hosted_inference"},
+      {:trinity_bridge_trace, path: "../../bridges/trinity_bridge_trace"},
       {:trinity_single_node, path: "../../apps/trinity_single_node"},
       {:self_hosted_inference_bumblebee, path: "../../../self_hosted_inference_bumblebee"},
       {:jason, "~> 1.4"}

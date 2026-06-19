@@ -1,0 +1,2 @@
+{"schema_version":1,"event":"route_decision","run_id":"valid","turn":0,"route_hash":"route-valid","selected_agent_id":0,"selected_role_id":0,"runtime_profile":"mock_tiny","transcript_hash":"tx-valid"}
+{not-json

@@ -336,6 +336,7 @@ defmodule TrinityFramework.MixProject do
         "docs/production_runbook.md",
         "docs/provider_smoke_tests.md",
         "docs/sakana_adapted_artifact_plan.md",
+        "docs/sakana_fitness_export.md",
         "docs/sakana_svd_byte_match_rigor_plan.md",
         "docs/sakana_svd_parity_debug_checklist.md",
         "docs/trace_persistence.md"
@@ -357,6 +358,7 @@ defmodule TrinityFramework.MixProject do
           "guides/artifacts_and_export.md",
           "guides/artifact_distribution.md",
           "docs/sakana_adapted_artifact_plan.md",
+          "docs/sakana_fitness_export.md",
           "docs/elixir_svd_decomposition.md"
         ],
         "Evaluation & QC": [

@@ -103,6 +103,24 @@ defmodule Trinity.Coordinator.Budgets do
     end
   end
 
+  @doc "Returns a trace-safe snapshot of current counters and budget state."
+  @spec snapshot(map(), atom(), map()) :: map()
+  def snapshot(run_ctx, checkpoint, extras \\ %{})
+      when is_map(run_ctx) and is_atom(checkpoint) and is_map(extras) do
+    counters = Map.get(run_ctx, :counters, %{})
+
+    %{
+      checkpoint: checkpoint,
+      provider_calls: provider_call_count(counters),
+      verifier_revisions: verifier_revision_count(counters),
+      estimated_cost_usd: estimated_cost_usd(counters),
+      wall_time_ms: elapsed_ms(counters[:started_monotonic_ms] || 0),
+      budget_exceeded: Map.get(extras, :budget_exceeded, false),
+      budget_exceeded_key: Map.get(extras, :budget_exceeded_key)
+    }
+    |> Map.merge(Map.drop(extras, [:budget_exceeded, :budget_exceeded_key]))
+  end
+
   defp budgets_from(opts) do
     Map.new(@budget_keys -- [:cost_estimator_fn], &{&1, Keyword.get(opts, &1)})
   end

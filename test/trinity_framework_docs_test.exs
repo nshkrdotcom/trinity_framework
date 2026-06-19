@@ -28,6 +28,7 @@ defmodule TrinityFrameworkDocsTest do
     docs/production_runbook.md
     docs/provider_smoke_tests.md
     docs/sakana_adapted_artifact_plan.md
+    docs/sakana_fitness_export.md
     docs/sakana_svd_byte_match_rigor_plan.md
     docs/sakana_svd_parity_debug_checklist.md
     docs/trace_persistence.md
@@ -47,9 +48,11 @@ defmodule TrinityFrameworkDocsTest do
     trinity.hitl.head_route
     trinity.hitl.mock_loop
     trinity.hitl.vector
+    trinity.orchestrator.demo
     trinity.parity.check
     trinity.route.demo
     trinity.sakana.export_adapted
+    trinity.sakana.fitness_export
     trinity.sakana.import_python
     trinity.sakana.large_tensor_chunks
     trinity.sakana.parity_sample
@@ -59,6 +62,7 @@ defmodule TrinityFrameworkDocsTest do
   @required_topics [
     {"artifact fetch", ["mix trinity.artifact.fetch", "artifact_pin.json"]},
     {"safetensors export", ["mix trinity.sakana.export_adapted", "safetensors"]},
+    {"fitness export", ["mix trinity.orchestrator.demo", "mix trinity.sakana.fitness_export"]},
     {"python import", ["mix trinity.sakana.import_python", "Python semantic"]},
     {"huggingface upload", ["HfHub.Repo.create", "HfHub.Commit.upload_folder"]},
     {"qwen eval", ["qwen_router_prompt_eval", "37-case"]},
