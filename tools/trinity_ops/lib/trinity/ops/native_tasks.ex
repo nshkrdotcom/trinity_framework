@@ -457,7 +457,12 @@ defmodule Trinity.Ops.NativeTasks do
     banner("TRINITY CRUCIBLE MATRIX EVAL")
     kv("Runtime profile", runtime_profile)
     kv("Eval mode", metadata.eval_mode)
-    kv("Qwen/Sakana artifact", if(metadata.qwen_route_ready?, do: "ready", else: "not ready"))
+
+    kv(
+      "Qwen/Sakana artifact",
+      if(metadata.qwen_artifact_ready?, do: "ready", else: "not ready")
+    )
+
     kv("Acceptance level", metadata.acceptance_level)
     kv("Snapshot policy", metadata.snapshot_policy)
     kv("Cases", length(cases))
@@ -505,6 +510,7 @@ defmodule Trinity.Ops.NativeTasks do
         }
       end)
 
+    metadata = EvalMetadata.with_execution_observed(metadata, rows)
     report = crucible_matrix_report(rows, metadata)
     File.mkdir_p!(Path.dirname(out))
     ArtifactIO.write_json!(out, normalize_for_json(report))
@@ -596,7 +602,9 @@ defmodule Trinity.Ops.NativeTasks do
     TRINITY Crucible Matrix Eval
       runtime profile: #{metadata.runtime_profile}
       eval mode: #{metadata.eval_mode}
-      Qwen/Sakana artifact ready: #{metadata.qwen_route_ready?}
+      Qwen/Sakana artifact ready: #{metadata.qwen_artifact_ready?}
+      runtime execution observed: #{metadata.runtime_execution_observed?}
+      Qwen route execution observed: #{metadata.qwen_route_executed?}
       acceptance level: #{metadata.acceptance_level}
       snapshot policy: #{metadata.snapshot_policy}
       cases: #{metrics.total}

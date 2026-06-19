@@ -119,6 +119,75 @@ defmodule Trinity.SingleNode.ArtifactIdentityTest do
     assert identity.source_vector_shape == [76]
   end
 
+  test "available unpinned Qwen/Sakana artifact is usable but not route-ready" do
+    root = Path.join(tmp_dir("available-unpinned"), "qwen-artifact")
+    manifest_path = Path.join(root, "manifest.json")
+    write_json!(manifest_path, valid_qwen_manifest())
+
+    identity = ArtifactIdentity.resolve(:cuda_exla, root)
+
+    assert identity.artifact_status == :available_unpinned
+    assert identity.artifact_status_reason == "artifact pin not found"
+    assert identity.artifact_available? == true
+    assert identity.artifact_pin_verified? == false
+    assert identity.qwen_base_model? == true
+    assert identity.sakana_route_artifact? == true
+    assert ArtifactIdentity.qwen_route_ready?(identity) == false
+  end
+
+  test "pin without manifest sha is reported as pin_missing and not route-ready" do
+    root = Path.join(tmp_dir("pin-missing"), "qwen-artifact")
+    manifest_path = Path.join(root, "manifest.json")
+    write_json!(manifest_path, valid_qwen_manifest())
+
+    write_json!(Path.join(root, "artifact_pin.json"), %{
+      "repo_id" => "example/qwen-sakana-pin-missing",
+      "revision" => "fixture-v1"
+    })
+
+    identity = ArtifactIdentity.resolve(:cuda_exla, root)
+
+    assert identity.artifact_status == :pin_missing
+    assert identity.artifact_status_reason == "artifact pin does not include manifest sha256"
+    assert identity.artifact_available? == false
+    assert identity.artifact_pin_verified? == false
+    assert identity.qwen_base_model? == true
+    assert identity.sakana_route_artifact? == true
+    assert ArtifactIdentity.qwen_route_ready?(identity) == false
+  end
+
+  test "invalid manifest json reports invalid_manifest with reason" do
+    root = Path.join(tmp_dir("invalid-manifest"), "qwen-artifact")
+    File.mkdir_p!(root)
+    File.write!(Path.join(root, "manifest.json"), "{not-json")
+
+    identity = ArtifactIdentity.resolve(:cuda_exla, root)
+
+    assert identity.artifact_status == :invalid_manifest
+    assert is_binary(identity.artifact_status_reason)
+    assert identity.artifact_status_reason != ""
+    assert identity.artifact_available? == false
+    assert identity.sakana_route_artifact? == false
+    assert ArtifactIdentity.qwen_route_ready?(identity) == false
+  end
+
+  test "incomplete Qwen manifest is not classified as a Sakana route artifact" do
+    root = Path.join(tmp_dir("incomplete-qwen"), "qwen-artifact")
+
+    write_json!(Path.join(root, "manifest.json"), %{
+      "base_model_repo" => "Qwen/Qwen3-0.6B",
+      "router_head_shape" => [10, 1024],
+      "selected_tensor_count" => 1,
+      "scale_offset_count" => 1024
+    })
+
+    identity = ArtifactIdentity.resolve(:cuda_exla, root)
+
+    assert identity.qwen_base_model? == true
+    assert identity.sakana_route_artifact? == false
+    assert ArtifactIdentity.qwen_route_ready?(identity) == false
+  end
+
   test "missing artifact manifest is reported as missing instead of default Qwen" do
     root = Path.join(tmp_dir("missing"), "missing-artifact")
     File.mkdir_p!(root)
@@ -151,6 +220,19 @@ defmodule Trinity.SingleNode.ArtifactIdentityTest do
   defp write_json!(path, payload) do
     File.mkdir_p!(Path.dirname(path))
     File.write!(path, Jason.encode!(payload))
+  end
+
+  defp valid_qwen_manifest do
+    %{
+      "artifact_layout" => "test_fixture",
+      "base_model_repo" => "Qwen/Qwen3-0.6B",
+      "router_head_artifact" => "router_head.safetensors",
+      "router_head_shape" => [10, 1024],
+      "scale_offset_count" => 1024,
+      "selected_tensor_count" => 1,
+      "source_vector_shape" => [11_264],
+      "status" => "complete"
+    }
   end
 
   defp sha256_file(path) do

@@ -12,7 +12,9 @@ defmodule Trinity.Ops.EvalMetadataTest do
     metadata = EvalMetadata.matrix(:mock_tiny, @fixture_artifact_root)
 
     assert metadata.qwen_loaded? == false
-    assert metadata.qwen_route_ready? == false
+    assert metadata.qwen_artifact_ready? == false
+    assert metadata.qwen_runtime_loaded? == false
+    assert metadata.qwen_route_executed? == false
     assert metadata.eval_mode == "mock_tiny contract eval"
     assert metadata.acceptance_level =~ "does not load Qwen"
     assert metadata.artifact_status == :mock
@@ -22,11 +24,13 @@ defmodule Trinity.Ops.EvalMetadataTest do
     metadata = EvalMetadata.matrix(:cuda_exla, @fixture_artifact_root)
 
     assert metadata.qwen_loaded? == false
+    assert metadata.qwen_artifact_ready? == true
+    assert metadata.qwen_runtime_loaded? == false
+    assert metadata.qwen_route_executed? == false
     assert metadata.qwen_base_model? == true
     assert metadata.sakana_route_artifact? == true
     assert metadata.artifact_available? == true
     assert metadata.artifact_pin_verified? == true
-    assert metadata.qwen_route_ready? == true
     assert metadata.eval_mode == "CUDA Qwen/Sakana route eval"
     assert metadata.model_id == "Qwen/Qwen3-0.6B"
     assert metadata.adapter_id == :trinity_qwen3_0_6b_sakana
@@ -45,7 +49,9 @@ defmodule Trinity.Ops.EvalMetadataTest do
     metadata = EvalMetadata.matrix(:custom, root)
 
     assert metadata.qwen_loaded? == false
-    assert metadata.qwen_route_ready? == false
+    assert metadata.qwen_artifact_ready? == false
+    assert metadata.qwen_runtime_loaded? == false
+    assert metadata.qwen_route_executed? == false
     assert metadata.eval_mode == "route runtime eval without Qwen artifact identity"
     assert metadata.model_id == "example/non-qwen-router"
     assert metadata.adapter_id == nil
@@ -59,11 +65,27 @@ defmodule Trinity.Ops.EvalMetadataTest do
     metadata = EvalMetadata.matrix(:binary, root)
 
     assert metadata.qwen_loaded? == false
-    assert metadata.qwen_route_ready? == false
+    assert metadata.qwen_artifact_ready? == false
+    assert metadata.qwen_runtime_loaded? == false
+    assert metadata.qwen_route_executed? == false
     assert metadata.eval_mode == "route runtime eval without Qwen artifact identity"
     assert metadata.model_id == nil
     assert metadata.adapter_id == nil
     assert metadata.artifact_status == :missing
+  end
+
+  test "matrix metadata can mark route execution observed after rows run" do
+    metadata = EvalMetadata.matrix(:cuda_exla, @fixture_artifact_root)
+
+    observed =
+      EvalMetadata.with_execution_observed(metadata, [
+        %{trace_model_id: "Qwen/Qwen3-0.6B", trace_signal_count: 1}
+      ])
+
+    assert observed.qwen_artifact_ready? == true
+    assert observed.qwen_runtime_loaded? == true
+    assert observed.qwen_route_executed? == true
+    assert observed.qwen_loaded? == true
   end
 
   defp tmp_dir(name) do

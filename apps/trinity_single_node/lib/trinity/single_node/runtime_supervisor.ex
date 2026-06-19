@@ -81,9 +81,14 @@ defmodule Trinity.SingleNode.RuntimeSupervisor do
     requested_profile = runtime_profile(opts)
     requested_identity = artifact_identity(requested_profile, opts)
 
-    with {:ok, loaded_runtime, plan, profile, identity} <-
+    with {:ok, request} <-
            runtime_for_request(messages, opts, requested_profile, requested_identity),
-         {:ok, logits} <- RuntimeAdapter.route(loaded_runtime.runtime, plan, route_opts(opts)),
+         loaded_runtime <- Map.fetch!(request, :loaded_runtime),
+         route_plan <- Map.fetch!(request, :route_plan),
+         profile <- Map.fetch!(request, :profile),
+         identity <- Map.fetch!(request, :identity),
+         {:ok, logits} <-
+           RuntimeAdapter.route(loaded_runtime.runtime, route_plan, route_opts(opts)),
          runtime_profile <- crucible_runtime_profile(profile, identity),
          context <- request_context(messages, opts, profile, identity),
          {:ok, tap_plan} <- TapPlanBuilder.build(context, runtime_profile),
@@ -103,6 +108,8 @@ defmodule Trinity.SingleNode.RuntimeSupervisor do
       {:ok,
        %{
          runtime: loaded_runtime,
+         route_plan: route_plan,
+         load_plan: Map.get(request, :load_plan),
          logits: logits,
          decision: decision,
          router_decision: RouteDecision.to_router_decision(decision),
@@ -174,20 +181,27 @@ defmodule Trinity.SingleNode.RuntimeSupervisor do
                ) do
           profile = loaded_runtime.runtime_profile
           identity = loaded_runtime.artifact_identity
-          plan = extraction_plan(messages, opts, profile, identity)
+          route_plan = extraction_plan(messages, opts, profile, identity)
 
-          {:ok, loaded_runtime, plan, profile, identity}
+          {:ok,
+           %{
+             loaded_runtime: loaded_runtime,
+             route_plan: route_plan,
+             load_plan: nil,
+             profile: profile,
+             identity: identity
+           }}
         end
 
       %RuntimeAdapter{} ->
         {:error, :unbound_runtime_identity}
 
       nil ->
-        plan = extraction_plan(messages, opts, requested_profile, requested_identity)
+        load_plan = extraction_plan(messages, opts, requested_profile, requested_identity)
 
         with {:ok, %RuntimeAdapter{} = runtime} <-
                RuntimeAdapter.load(
-                 plan,
+                 load_plan,
                  runtime_adapter_opts(opts, requested_profile, requested_identity)
                ) do
           loaded_runtime =
@@ -198,7 +212,17 @@ defmodule Trinity.SingleNode.RuntimeSupervisor do
               backend_identity(runtime, requested_profile)
             )
 
-          {:ok, loaded_runtime, plan, requested_profile, loaded_runtime.artifact_identity}
+          identity = loaded_runtime.artifact_identity
+          route_plan = extraction_plan(messages, opts, requested_profile, identity)
+
+          {:ok,
+           %{
+             loaded_runtime: loaded_runtime,
+             route_plan: route_plan,
+             load_plan: load_plan,
+             profile: requested_profile,
+             identity: identity
+           }}
         end
 
       other ->
@@ -427,6 +451,9 @@ defmodule Trinity.SingleNode.RuntimeSupervisor do
       artifact_root: identity.artifact_root,
       artifact_status: identity.artifact_status,
       artifact_status_reason: identity.artifact_status_reason,
+      manifest_status: identity.manifest_status,
+      artifact_layout: identity.artifact_layout,
+      router_head_artifact: identity.router_head_artifact,
       artifact_available?: identity.artifact_available?,
       qwen_base_model?: identity.qwen_base_model?,
       sakana_route_artifact?: identity.sakana_route_artifact?,

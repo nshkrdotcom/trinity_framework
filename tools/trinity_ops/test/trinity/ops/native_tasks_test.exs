@@ -57,7 +57,9 @@ defmodule Trinity.Ops.NativeTasksTest do
     assert get_in(report, ["metadata", "runtime_profile"]) == "mock_tiny"
     assert get_in(report, ["metadata", "eval_mode"]) == "mock_tiny contract eval"
     assert get_in(report, ["metadata", "qwen_loaded?"]) == false
-    assert get_in(report, ["metadata", "qwen_route_ready?"]) == false
+    assert get_in(report, ["metadata", "qwen_artifact_ready?"]) == false
+    assert get_in(report, ["metadata", "qwen_runtime_loaded?"]) == false
+    assert get_in(report, ["metadata", "qwen_route_executed?"]) == false
     assert get_in(report, ["metadata", "acceptance_level"]) =~ "does not load Qwen"
     assert get_in(report, ["metrics", "contract_strictness"]) == 1.0
     assert Enum.all?(report["rows"], &(&1["trace_signal_count"] > 0))
@@ -81,7 +83,9 @@ defmodule Trinity.Ops.NativeTasksTest do
     assert metadata["runtime_profile"] == "mock_tiny"
     assert metadata["eval_mode"] == "mock_tiny contract eval"
     assert metadata["qwen_loaded?"] == false
-    assert metadata["qwen_route_ready?"] == false
+    assert metadata["qwen_artifact_ready?"] == false
+    assert metadata["qwen_runtime_loaded?"] == false
+    assert metadata["qwen_route_executed?"] == false
   end
 
   test "crucible inspect replays a pinned fixture trace without live provider" do

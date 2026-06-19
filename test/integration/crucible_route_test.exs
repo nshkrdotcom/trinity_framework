@@ -82,6 +82,86 @@ defmodule TrinityFramework.Integration.CrucibleRouteTest do
     assert result.trace_path == trace_path
   end
 
+  test "Crucible route rebuilds route plan with executed runtime identity" do
+    messages = [%{"role" => "user", "content" => "Route with executed plan identity."}]
+
+    assert {:ok, result} =
+             SingleNode.route(messages,
+               runtime_profile: :mock_tiny,
+               trace_ref: "trace:executed-plan",
+               coordination_run_ref: "run:executed-plan"
+             )
+
+    assert result.route_plan.metadata.artifact_identity.runtime_loaded? == true
+    assert result.route_plan.metadata.artifact_identity.executed_runtime? == true
+
+    assert result.route_plan.runtime_profile_ref.metadata.artifact_identity.runtime_loaded? ==
+             true
+
+    assert result.route_plan.artifact_ref.metadata.artifact_identity.executed_runtime? ==
+             true
+  end
+
+  test "Crucible route rejects raw RuntimeAdapter handles without runtime identity" do
+    messages = [%{"role" => "user", "content" => "Route with raw runtime."}]
+
+    {:ok, loaded_runtime} =
+      SingleNode.load_runtime(runtime_profile: :mock_tiny, messages: messages)
+
+    assert {:error, :unbound_runtime_identity} =
+             SingleNode.route(messages,
+               runtime: loaded_runtime.runtime,
+               runtime_profile: :mock_tiny,
+               trace_ref: "trace:raw-runtime",
+               coordination_run_ref: "run:raw-runtime"
+             )
+  end
+
+  test "Crucible route accepts loaded runtime with matching explicit artifact root" do
+    artifact_root = Path.join(tmp_dir("matching-root"), "mock-artifact")
+    File.mkdir_p!(artifact_root)
+    messages = [%{"role" => "user", "content" => "Route with matching root."}]
+
+    {:ok, runtime} =
+      SingleNode.load_runtime(
+        runtime_profile: :mock_tiny,
+        artifact_root: artifact_root,
+        messages: messages
+      )
+
+    assert {:ok, result} =
+             SingleNode.route(messages,
+               runtime: runtime,
+               runtime_profile: :mock_tiny,
+               artifact_root: artifact_root,
+               trace_ref: "trace:matching-root",
+               coordination_run_ref: "run:matching-root"
+             )
+
+    assert result.runtime.artifact_identity.artifact_root == artifact_root
+    assert result.route_plan.metadata.artifact_identity.artifact_root == artifact_root
+  end
+
+  test "Crucible route rejects loaded runtime with mismatched explicit artifact ref" do
+    messages = [%{"role" => "user", "content" => "Route with mismatched ref."}]
+
+    {:ok, runtime} =
+      SingleNode.load_runtime(runtime_profile: :mock_tiny, messages: messages)
+
+    assert {:error, {:runtime_identity_mismatch, details}} =
+             SingleNode.route(messages,
+               runtime: runtime,
+               runtime_profile: :mock_tiny,
+               artifact_ref: "artifact:different-runtime",
+               trace_ref: "trace:mismatched-ref",
+               coordination_run_ref: "run:mismatched-ref"
+             )
+
+    assert details.reason == :artifact_ref
+    assert details.requested_artifact_ref == "artifact:different-runtime"
+    assert details.executed_artifact_ref == "artifact:mock-tiny-route-runtime"
+  end
+
   test "Crucible route rejects requested identity that conflicts with loaded runtime" do
     artifact_root = Path.join(tmp_dir("custom-artifact"), "custom-artifact")
     File.mkdir_p!(artifact_root)

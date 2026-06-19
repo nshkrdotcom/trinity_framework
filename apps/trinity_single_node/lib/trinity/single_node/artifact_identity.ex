@@ -35,6 +35,9 @@ defmodule Trinity.SingleNode.ArtifactIdentity do
       artifact_root: artifact_root,
       artifact_status: :mock,
       artifact_status_reason: nil,
+      manifest_status: nil,
+      artifact_layout: nil,
+      router_head_artifact: nil,
       artifact_available?: false,
       artifact_runtime?: false,
       artifact_pin_verified?: false,
@@ -113,6 +116,9 @@ defmodule Trinity.SingleNode.ArtifactIdentity do
       artifact_root: root,
       artifact_status: status,
       artifact_status_reason: reason,
+      manifest_status: facts.manifest_status,
+      artifact_layout: facts.artifact_layout,
+      router_head_artifact: facts.router_head_artifact,
       artifact_available?: artifact_available_status?(status),
       artifact_runtime?: artifact_available_status?(status),
       artifact_pin_verified?: pin_verified?,
@@ -151,6 +157,9 @@ defmodule Trinity.SingleNode.ArtifactIdentity do
       artifact_root: root,
       artifact_status: :missing,
       artifact_status_reason: "manifest.json not found",
+      manifest_status: nil,
+      artifact_layout: nil,
+      router_head_artifact: nil,
       artifact_available?: false,
       artifact_runtime?: false,
       artifact_pin_verified?: false,
@@ -173,6 +182,9 @@ defmodule Trinity.SingleNode.ArtifactIdentity do
       :artifact_ref,
       :artifact_repo,
       :artifact_revision,
+      :manifest_status,
+      :artifact_layout,
+      :router_head_artifact,
       :router_head_shape,
       :selected_tensor_count,
       :scale_offset_count,
@@ -216,22 +228,33 @@ defmodule Trinity.SingleNode.ArtifactIdentity do
 
     selected_tensor_count = selected_tensor_count(manifest)
     scale_offset_count = scale_offset_count(manifest)
+    source_vector_shape = list_field(manifest, "source_vector_shape")
     qwen_base_model? = qwen_base_model?(model_id)
+    manifest_status = string_field(manifest, "status")
+    artifact_layout = string_field(manifest, "artifact_layout")
+    router_head_artifact = string_field(manifest, "router_head_artifact")
 
     %{
       model_id: model_id,
+      manifest_status: manifest_status,
+      artifact_layout: artifact_layout,
+      router_head_artifact: router_head_artifact,
       qwen_base_model?: qwen_base_model?,
       sakana_route_artifact?:
         sakana_route_artifact?(
           qwen_base_model?,
+          manifest_status,
+          artifact_layout,
+          router_head_artifact,
           router_head_shape,
           selected_tensor_count,
-          scale_offset_count
+          scale_offset_count,
+          source_vector_shape
         ),
       router_head_shape: router_head_shape,
       selected_tensor_count: selected_tensor_count,
       scale_offset_count: scale_offset_count,
-      source_vector_shape: list_field(manifest, "source_vector_shape")
+      source_vector_shape: source_vector_shape
     }
   end
 
@@ -250,21 +273,31 @@ defmodule Trinity.SingleNode.ArtifactIdentity do
   defp sakana_route_artifact?(identity, qwen_base_model?) do
     sakana_route_artifact?(
       qwen_base_model?,
+      identity.manifest_status,
+      identity.artifact_layout,
+      identity.router_head_artifact,
       identity.router_head_shape,
       identity.selected_tensor_count,
-      identity.scale_offset_count
+      identity.scale_offset_count,
+      identity.source_vector_shape
     )
   end
 
   defp sakana_route_artifact?(
          qwen_base_model?,
+         manifest_status,
+         artifact_layout,
+         router_head_artifact,
          router_head_shape,
          selected_tensor_count,
-         scale_offset_count
+         scale_offset_count,
+         source_vector_shape
        ) do
-    qwen_base_model? and list_pair?(router_head_shape) and
+    qwen_base_model? and manifest_status == "complete" and
+      known_artifact_layout?(artifact_layout) and present_string?(router_head_artifact) and
+      router_head_shape == [10, 1024] and
       positive_integer?(selected_tensor_count) and
-      positive_integer?(scale_offset_count)
+      positive_integer?(scale_offset_count) and non_empty_list?(source_vector_shape)
   end
 
   defp artifact_available_status?(status), do: status in [:available, :available_unpinned]
@@ -422,10 +455,14 @@ defmodule Trinity.SingleNode.ArtifactIdentity do
   defp short_sha(<<prefix::binary-size(12), _rest::binary>>), do: prefix
   defp short_sha(value), do: value
 
-  defp list_pair?([left, right]) when is_integer(left) and is_integer(right), do: true
-  defp list_pair?(_value), do: false
-
   defp positive_integer?(value), do: is_integer(value) and value > 0
+  defp non_empty_list?(value), do: is_list(value) and value != []
+
+  defp present_string?(value), do: is_binary(value) and value != ""
+
+  defp known_artifact_layout?(layout) do
+    layout in ["checkpoint_directory", "test_fixture", "trinity_sakana"]
+  end
 
   defp opt(opts, key, default \\ nil), do: Keyword.get(opts, key, default)
 end

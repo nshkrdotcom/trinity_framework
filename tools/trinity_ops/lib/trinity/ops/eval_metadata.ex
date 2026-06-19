@@ -11,19 +11,25 @@ defmodule Trinity.Ops.EvalMetadata do
   @spec matrix(atom(), String.t() | nil, keyword()) :: map()
   def matrix(runtime_profile, artifact_root, opts \\ []) do
     identity = ArtifactIdentity.resolve(runtime_profile, artifact_root, opts)
-    qwen_route_ready? = ArtifactIdentity.qwen_route_ready?(identity)
+    qwen_artifact_ready? = ArtifactIdentity.qwen_route_ready?(identity)
+    qwen_runtime_loaded? = identity.runtime_loaded?
+    qwen_route_executed? = identity.executed_runtime?
 
     %{
       runtime_profile: Atom.to_string(runtime_profile),
-      eval_mode: eval_mode(runtime_profile, identity, qwen_route_ready?),
-      qwen_loaded?: identity.qwen_loaded?,
+      eval_mode: eval_mode(runtime_profile, identity, qwen_artifact_ready?),
+      qwen_loaded?: qwen_runtime_loaded?,
+      qwen_artifact_ready?: qwen_artifact_ready?,
+      qwen_runtime_loaded?: qwen_runtime_loaded?,
+      qwen_route_executed?: qwen_route_executed?,
+      runtime_execution_observed?: false,
       qwen_base_model?: identity.qwen_base_model?,
       sakana_route_artifact?: identity.sakana_route_artifact?,
-      qwen_route_ready?: qwen_route_ready?,
+      qwen_route_ready?: qwen_artifact_ready?,
       artifact_available?: identity.artifact_available?,
       artifact_pin_verified?: identity.artifact_pin_verified?,
-      acceptance_level: acceptance_level(runtime_profile, identity, qwen_route_ready?),
-      snapshot_policy: snapshot_policy(qwen_route_ready?),
+      acceptance_level: acceptance_level(runtime_profile, identity, qwen_artifact_ready?),
+      snapshot_policy: snapshot_policy(qwen_artifact_ready?),
       model_id: identity.model_id,
       adapter_id: identity.adapter_id,
       artifact_ref: identity.artifact_ref,
@@ -32,6 +38,27 @@ defmodule Trinity.Ops.EvalMetadata do
       artifact_manifest_sha256_actual: identity.artifact_manifest_sha256_actual,
       artifact_pin_manifest_sha256: identity.artifact_pin_manifest_sha256
     }
+  end
+
+  @spec with_execution_observed(map(), [map()]) :: map()
+  def with_execution_observed(metadata, rows) when is_map(metadata) and is_list(rows) do
+    runtime_execution_observed? =
+      Enum.any?(rows, fn row ->
+        positive_integer?(field(row, :trace_signal_count)) and is_binary(field(row, :trace_id))
+      end)
+
+    qwen_execution_observed? =
+      metadata.qwen_artifact_ready? and
+        Enum.any?(rows, fn row ->
+          positive_integer?(field(row, :trace_signal_count)) and
+            field(row, :trace_model_id) == metadata.model_id
+        end)
+
+    metadata
+    |> Map.put(:runtime_execution_observed?, runtime_execution_observed?)
+    |> Map.put(:qwen_runtime_loaded?, qwen_execution_observed?)
+    |> Map.put(:qwen_route_executed?, qwen_execution_observed?)
+    |> Map.put(:qwen_loaded?, qwen_execution_observed?)
   end
 
   defp eval_mode(:mock_tiny, _identity, _qwen_route_ready?), do: "mock_tiny contract eval"
@@ -54,4 +81,9 @@ defmodule Trinity.Ops.EvalMetadata do
     do: "Strict Qwen snapshot acceptance belongs to the direct example eval fixture"
 
   defp snapshot_policy(false), do: "No Qwen logits snapshot is used without Qwen identity"
+
+  defp positive_integer?(value), do: is_integer(value) and value > 0
+
+  defp field(map, field) when is_map(map),
+    do: Map.get(map, field, Map.get(map, Atom.to_string(field)))
 end

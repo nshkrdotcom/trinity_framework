@@ -40,6 +40,9 @@ defmodule TrinityFramework.Integration.TraceAdapterTest do
       artifact_manifest_sha256_actual: String.duplicate("a", 64),
       artifact_pin_manifest_sha256: String.duplicate("a", 64),
       artifact_pin_verified?: true,
+      artifact_manifest_path: "/tmp/trinity/artifact/manifest.json",
+      artifact_pin_path: "/tmp/trinity/artifact/artifact_pin.json",
+      artifact_root: "/tmp/trinity/artifact",
       artifact_status: :available,
       artifact_available?: true,
       qwen_base_model?: true,
@@ -75,6 +78,12 @@ defmodule TrinityFramework.Integration.TraceAdapterTest do
     assert trace.metadata.artifact_manifest_sha256_actual == String.duplicate("a", 64)
     assert trace.metadata.artifact_pin_manifest_sha256 == String.duplicate("a", 64)
     assert trace.metadata.artifact_pin_verified? == true
+    refute Map.has_key?(trace.metadata, :artifact_manifest_path)
+    refute Map.has_key?(trace.metadata, :artifact_pin_path)
+    refute Map.has_key?(trace.metadata, :artifact_root)
+    assert trace.metadata.local_artifact_manifest_path == "/tmp/trinity/artifact/manifest.json"
+    assert trace.metadata.local_artifact_pin_path == "/tmp/trinity/artifact/artifact_pin.json"
+    assert trace.metadata.local_artifact_root == "/tmp/trinity/artifact"
     assert trace.metadata.artifact_available? == true
     assert trace.metadata.qwen_base_model? == true
     assert trace.metadata.sakana_route_artifact? == true
@@ -89,6 +98,11 @@ defmodule TrinityFramework.Integration.TraceAdapterTest do
     assert trace.final_logits.metadata.artifact_status == :available
     assert trace.final_logits.metadata.artifact_pin_verified? == true
     assert trace.final_logits.metadata.executed_runtime? == true
+    refute Map.has_key?(trace.final_logits.metadata, :artifact_manifest_path)
+    refute Map.has_key?(trace.final_logits.metadata, :artifact_pin_path)
+
+    assert trace.final_logits.metadata.local_artifact_manifest_path ==
+             "/tmp/trinity/artifact/manifest.json"
   end
 
   test "TraceAdapter does not atomize arbitrary backend labels" do
