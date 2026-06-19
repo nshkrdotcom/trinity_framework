@@ -18,7 +18,7 @@ defmodule Trinity.Coordinator.OrchestratorReflexTest do
          role_logits: [0.0, 0.0, 0.0],
          agent_logits: [0.0, 0.0],
          selected_role_id: state.role_id,
-         selected_agent_id: 0,
+         selected_agent_id: Map.get(state, :selected_agent_id, 0),
          token_count: 4,
          transcript_hash: String.duplicate("a", 64),
          route_hash_inputs: %{turn: turn, role_id: state.role_id},
@@ -106,6 +106,27 @@ defmodule Trinity.Coordinator.OrchestratorReflexTest do
     assert reflex.payload.next_role_override == 1
   end
 
+  test "reflex role override preserves the selected agent slot" do
+    assert {:ok, _result} =
+             run(0, %{agent: 0.5, role: 0.5}, max_turns: 2, selected_agent_id: 1)
+
+    assert collect_intents() == ["thinker", "verifier"]
+
+    events = collect_events()
+
+    dispatches =
+      events
+      |> Enum.filter(&(&1.event_type == :provider_dispatch_started))
+      |> Enum.map(&{&1.payload.selected_agent_id, &1.payload.selected_role_id})
+
+    assert dispatches == [{1, 1}, {1, 2}]
+
+    reflex = event!(events, :reflex_decision)
+    assert reflex.payload.selected_agent_id == 1
+    assert reflex.payload.selected_role_id == 0
+    assert reflex.payload.original_role_atom == :worker
+  end
+
   test "low-confidence Thinker dispatches Thinker and forces Verifier next" do
     assert {:ok, _result} = run(1, %{agent: 0.5, role: 0.5}, max_turns: 2)
     assert collect_intents() == ["thinker", "verifier"]
@@ -186,7 +207,11 @@ defmodule Trinity.Coordinator.OrchestratorReflexTest do
 
     Orchestrator.run_loop([%{role: "user", content: "classified prompt secret"}],
       model_runtime: Runtime,
-      model_state: %{role_id: role_id, margins: margins},
+      model_state: %{
+        role_id: role_id,
+        margins: margins,
+        selected_agent_id: Keyword.get(opts, :selected_agent_id, 0)
+      },
       agent_caller: Caller,
       agent_opts: [test_pid: self(), verifier_text: verifier_text],
       max_turns: Keyword.fetch!(opts, :max_turns),

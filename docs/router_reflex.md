@@ -22,6 +22,13 @@ worker turn. If the selected route is Thinker, the Orchestrator dispatches
 Thinker and forces Verifier on the next turn. If the selected route is Verifier,
 the Orchestrator dispatches Verifier directly.
 
+Reflex changes the role path, not the selected agent slot. A low-confidence
+Worker route that selected `agent:1` dispatches `thinker` on `agent:1`, then
+`verifier` on `agent:1`. This keeps the router-selected agent slot as execution
+provenance while allowing role injection to add deliberation. Consumers that
+need role-specific provider placement should express that in their provider
+pool or agent-slot mapping, not by reinterpreting the reflex trace.
+
 ## Thresholds
 
 The default mode is `profile_floor`. Thresholds are derived from
@@ -58,6 +65,7 @@ Useful controls:
 mix trinity.orchestrator.demo \
   --mock-provider \
   --runtime-profile mock_tiny \
+  --max-turns 3 \
   --reflex \
   --reflex-margin-mode absolute \
   --reflex-low-agent-margin 999.0 \
@@ -65,6 +73,10 @@ mix trinity.orchestrator.demo \
   --trace-out tmp/reflex_demo/low.jsonl \
   --json
 ```
+
+Use at least two turns when intentionally forcing low confidence. A one-turn
+low-confidence run can only dispatch the forced Thinker turn and should fail
+with `:max_turns_reached` before Verifier can accept.
 
 Disable reflex only for legacy comparisons:
 

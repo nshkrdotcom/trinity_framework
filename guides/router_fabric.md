@@ -36,6 +36,11 @@ normal behavior, and low-confidence routes force Thinker before Verifier. This
 keeps system-1/system-2 routing inside the reusable coordinator loop instead of
 duplicating it in product adapters.
 
+Reflex role overrides preserve the router-selected agent slot. The policy can
+change Worker into Thinker or Verifier for the execution path, but it does not
+silently remap `selected_agent_id`; provider placement remains a provider-pool
+or agent-slot mapping concern.
+
 Downstream consumers should treat `reflex_decision` trace events as execution
 evidence. They should not infer reflex behavior by re-reading raw prompts or
 provider payloads, and they should not create a separate agent loop to mimic

@@ -234,6 +234,11 @@ routes record `thinker_then_verifier` and force Thinker before Verifier. Disable
 this only for legacy comparisons with `--no-reflex`; see
 [Router Reflex](docs/router_reflex.md).
 
+Reflex role overrides preserve the selected agent slot. The Orchestrator may
+change the dispatched role from Worker to Thinker/Verifier, but it does not
+silently remap `selected_agent_id`; provider placement remains an explicit
+provider-pool or agent-slot mapping concern.
+
 Each trace contains route, provider dispatch, verifier, budget, and terminal
 run events, including `reflex_decision` when reflex is enabled. A verifier
 `revision_count` is cumulative after applying the current verifier decision, so
