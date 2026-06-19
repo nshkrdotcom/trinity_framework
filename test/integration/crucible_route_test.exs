@@ -162,6 +162,41 @@ defmodule TrinityFramework.Integration.CrucibleRouteTest do
     assert details.executed_artifact_ref == "artifact:mock-tiny-route-runtime"
   end
 
+  test "runtime load rejects provenance-shaping options" do
+    assert {:error, {:invalid_artifact_identity_options, keys}} =
+             SingleNode.load_runtime(
+               runtime_profile: :mock_tiny,
+               manifest_status: "complete",
+               router_head_shape: [10, 1024]
+             )
+
+    assert keys == [:manifest_status, :router_head_shape]
+  end
+
+  test "runtime load accepts matching identity assertions" do
+    assert {:ok, runtime} =
+             SingleNode.load_runtime(
+               runtime_profile: :mock_tiny,
+               artifact_ref: "artifact:mock-tiny-route-runtime",
+               model_id: "trinity/mock-tiny-route-runtime"
+             )
+
+    assert runtime.artifact_identity.artifact_ref == "artifact:mock-tiny-route-runtime"
+    assert runtime.artifact_identity.model_id == "trinity/mock-tiny-route-runtime"
+  end
+
+  test "runtime load rejects identity assertions that do not match resolved provenance" do
+    assert {:error, {:artifact_identity_mismatch, details}} =
+             SingleNode.load_runtime(
+               runtime_profile: :mock_tiny,
+               model_id: "example/spoofed-model"
+             )
+
+    assert details.reason == :model_id
+    assert details.expected == "example/spoofed-model"
+    assert details.actual == "trinity/mock-tiny-route-runtime"
+  end
+
   test "Crucible route rejects requested identity that conflicts with loaded runtime" do
     artifact_root = Path.join(tmp_dir("custom-artifact"), "custom-artifact")
     File.mkdir_p!(artifact_root)

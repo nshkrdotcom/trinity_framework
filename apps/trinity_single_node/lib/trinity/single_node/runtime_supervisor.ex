@@ -43,7 +43,8 @@ defmodule Trinity.SingleNode.RuntimeSupervisor do
     profile = runtime_profile(opts)
     identity = artifact_identity(profile, opts)
 
-    with :ok <- ensure_runtime_backend(),
+    with :ok <- ArtifactIdentity.validate_request(identity, opts),
+         :ok <- ensure_runtime_backend(),
          plan <- extraction_plan(Keyword.get(opts, :messages, []), opts, profile, identity),
          {:ok, %RuntimeAdapter{} = runtime} <-
            RuntimeAdapter.load(plan, runtime_adapter_opts(opts, profile, identity)) do
@@ -172,13 +173,15 @@ defmodule Trinity.SingleNode.RuntimeSupervisor do
   defp runtime_for_request(messages, opts, requested_profile, requested_identity) do
     case Keyword.get(opts, :runtime) do
       %LoadedRuntime{} = loaded_runtime ->
-        with :ok <-
+        with :ok <- ArtifactIdentity.validate_options(opts),
+             :ok <-
                ensure_loaded_runtime_matches_request(
                  loaded_runtime,
                  opts,
                  requested_profile,
                  requested_identity
-               ) do
+               ),
+             :ok <- ArtifactIdentity.validate_expectations(loaded_runtime.artifact_identity, opts) do
           profile = loaded_runtime.runtime_profile
           identity = loaded_runtime.artifact_identity
           route_plan = extraction_plan(messages, opts, profile, identity)
@@ -199,7 +202,8 @@ defmodule Trinity.SingleNode.RuntimeSupervisor do
       nil ->
         load_plan = extraction_plan(messages, opts, requested_profile, requested_identity)
 
-        with {:ok, %RuntimeAdapter{} = runtime} <-
+        with :ok <- ArtifactIdentity.validate_request(requested_identity, opts),
+             {:ok, %RuntimeAdapter{} = runtime} <-
                RuntimeAdapter.load(
                  load_plan,
                  runtime_adapter_opts(opts, requested_profile, requested_identity)
@@ -249,8 +253,8 @@ defmodule Trinity.SingleNode.RuntimeSupervisor do
         runtime_identity_mismatch(:artifact_root, loaded_runtime, requested_identity)
 
       Keyword.has_key?(opts, :artifact_ref) and
-          requested_identity.artifact_ref != executed_identity.artifact_ref ->
-        runtime_identity_mismatch(:artifact_ref, loaded_runtime, requested_identity)
+          Keyword.fetch!(opts, :artifact_ref) != executed_identity.artifact_ref ->
+        runtime_identity_mismatch(:artifact_ref, loaded_runtime, requested_identity, opts)
 
       true ->
         :ok
@@ -258,12 +262,21 @@ defmodule Trinity.SingleNode.RuntimeSupervisor do
   end
 
   defp runtime_identity_mismatch(reason, %LoadedRuntime{} = loaded_runtime, requested_identity) do
+    runtime_identity_mismatch(reason, loaded_runtime, requested_identity, [])
+  end
+
+  defp runtime_identity_mismatch(
+         reason,
+         %LoadedRuntime{} = loaded_runtime,
+         requested_identity,
+         opts
+       ) do
     {:error,
      {:runtime_identity_mismatch,
       %{
         reason: reason,
         requested_profile: requested_identity.name,
-        requested_artifact_ref: requested_identity.artifact_ref,
+        requested_artifact_ref: Keyword.get(opts, :artifact_ref, requested_identity.artifact_ref),
         requested_artifact_root: requested_identity.artifact_root,
         executed_profile: loaded_runtime.runtime_profile,
         executed_artifact_ref: loaded_runtime.artifact_identity.artifact_ref,

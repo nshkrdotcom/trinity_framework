@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Make runtime artifact provenance immutable: manifest and pin data are the
+  source of truth, identity options are validated as assertions, and
+  provenance-shaping runtime options fail closed.
 - Expand V5 Trinity Crucible trace replay to files, directories, and globs, with
   policy decision and route decision artifacts written under `tmp/crucible_v5`.
 - Add V5 live inspect options for real hosted model IDs, backends,

@@ -79,10 +79,15 @@ defmodule Trinity.Ops.EvalMetadataTest do
 
     observed =
       EvalMetadata.with_execution_observed(metadata, [
-        %{trace_model_id: "Qwen/Qwen3-0.6B", trace_signal_count: 1}
+        %{
+          trace_id: "trace:eval-metadata",
+          trace_model_id: "Qwen/Qwen3-0.6B",
+          trace_signal_count: 1
+        }
       ])
 
     assert observed.qwen_artifact_ready? == true
+    assert observed.runtime_execution_observed? == true
     assert observed.qwen_runtime_loaded? == true
     assert observed.qwen_route_executed? == true
     assert observed.qwen_loaded? == true

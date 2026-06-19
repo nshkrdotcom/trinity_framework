@@ -38,6 +38,59 @@ defmodule Trinity.SingleNode.ArtifactIdentityTest do
     assert identity.source_vector_shape == [11_264]
   end
 
+  test "manifest provenance cannot be reshaped by caller options" do
+    identity =
+      ArtifactIdentity.resolve(:cuda_exla, @fixture_artifact_root,
+        adapter_id: :spoofed_adapter,
+        model_id: "example/spoofed-model",
+        artifact_ref: "artifact:spoofed",
+        artifact_repo: "example/spoofed-repo",
+        artifact_revision: "spoofed-revision",
+        manifest_status: "spoofed",
+        artifact_layout: "spoofed",
+        router_head_artifact: "spoofed.safetensors",
+        router_head_shape: [1, 1],
+        selected_tensor_count: 99,
+        scale_offset_count: 99,
+        source_vector_shape: [99]
+      )
+
+    assert identity.adapter_id == :trinity_qwen3_0_6b_sakana
+    assert identity.model_id == "Qwen/Qwen3-0.6B"
+    assert identity.artifact_ref == "artifact:example_qwen-sakana-tiny:fixture-v1:79836c21c7df"
+    assert identity.artifact_repo == "example/qwen-sakana-tiny"
+    assert identity.artifact_revision == "fixture-v1"
+    assert identity.manifest_status == "complete"
+    assert identity.artifact_layout == "test_fixture"
+    assert identity.router_head_artifact == "router_head.safetensors"
+    assert identity.router_head_shape == [10, 1024]
+    assert identity.selected_tensor_count == 1
+    assert identity.scale_offset_count == 1024
+    assert identity.source_vector_shape == [11_264]
+    assert ArtifactIdentity.qwen_route_ready?(identity) == true
+  end
+
+  test "mock runtime provenance is fixed by the framework contract" do
+    identity =
+      ArtifactIdentity.resolve(:mock_tiny, nil,
+        adapter_id: :spoofed_adapter,
+        model_id: "example/spoofed-model",
+        artifact_ref: "artifact:spoofed",
+        router_head_shape: [99, 99],
+        selected_tensor_count: 99,
+        scale_offset_count: 99,
+        source_vector_shape: [99]
+      )
+
+    assert identity.adapter_id == :mock_tiny
+    assert identity.model_id == "trinity/mock-tiny-route-runtime"
+    assert identity.artifact_ref == "artifact:mock-tiny-route-runtime"
+    assert identity.router_head_shape == [10, 8]
+    assert identity.selected_tensor_count == 0
+    assert identity.scale_offset_count == 0
+    assert identity.source_vector_shape == []
+  end
+
   @tag :qwen_artifact
   test "real default Qwen artifact identity is canonical when generated bundle is present" do
     manifest_path = Path.join(@default_artifact_root, "manifest.json")
