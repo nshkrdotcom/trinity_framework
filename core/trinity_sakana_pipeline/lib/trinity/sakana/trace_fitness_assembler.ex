@@ -20,6 +20,7 @@ defmodule Trinity.Sakana.TraceFitnessAssembler do
     verifier = find_verifier(entries, run_id, turn, route_hash)
     budget = find_budget(entries, run_id, turn)
     eval_result = find_eval(entries, run_id, turn, route_hash, field(route, "case_id"))
+    reflex = find_reflex(entries, run_id, turn, route_hash)
     {outcome_source, verifier_status} = outcome_status(verifier, eval_result)
 
     source = %{
@@ -36,23 +37,25 @@ defmodule Trinity.Sakana.TraceFitnessAssembler do
       }
       |> maybe_put_messages(content, field(route, "input_content"))
 
-    route_data = %{
-      "selected_agent_id" => field(route, "selected_agent_id"),
-      "selected_role_id" => field(route, "selected_role_id"),
-      "role_name" => field(route, "role_name"),
-      "agent_margin" => field(route, "agent_margin"),
-      "role_margin" => field(route, "role_margin"),
-      "min_margin" => field(route, "min_margin"),
-      "confidence_band" => field(route, "confidence_band"),
-      "token_count" => field(route, "token_count"),
-      "route_hash" => route_hash,
-      "runtime_profile" => field(route, "runtime_profile"),
-      "provider_pool" => field(route, "provider_pool"),
-      "route_path" => field(route, "route_path"),
-      "artifact_ref" => field(route, "artifact_ref"),
-      "artifact_revision" => field(route, "artifact_revision"),
-      "artifact_hash_ref" => field(route, "artifact_hash_ref")
-    }
+    route_data =
+      %{
+        "selected_agent_id" => field(route, "selected_agent_id"),
+        "selected_role_id" => field(route, "selected_role_id"),
+        "role_name" => field(route, "role_name"),
+        "agent_margin" => field(route, "agent_margin"),
+        "role_margin" => field(route, "role_margin"),
+        "min_margin" => field(route, "min_margin"),
+        "confidence_band" => field(route, "confidence_band"),
+        "token_count" => field(route, "token_count"),
+        "route_hash" => route_hash,
+        "runtime_profile" => field(route, "runtime_profile"),
+        "provider_pool" => field(route, "provider_pool"),
+        "route_path" => field(route, "route_path"),
+        "artifact_ref" => field(route, "artifact_ref"),
+        "artifact_revision" => field(route, "artifact_revision"),
+        "artifact_hash_ref" => field(route, "artifact_hash_ref")
+      }
+      |> maybe_put_reflex(reflex)
 
     outcome = %{
       "source" => outcome_source,
@@ -178,6 +181,16 @@ defmodule Trinity.Sakana.TraceFitnessAssembler do
     end)
   end
 
+  defp find_reflex(entries, run_id, turn, route_hash) do
+    Enum.find_value(entries, %{}, fn entry ->
+      record = entry.record
+
+      if event(entry) == "reflex_decision" and run_id(record) == run_id and
+           reflex_match?(record, turn, route_hash),
+         do: record
+    end)
+  end
+
   defp outcome_status(verifier, _eval_result) when map_size(verifier) > 0,
     do: {"verifier", normalize_status(field(verifier, "status"))}
 
@@ -207,6 +220,54 @@ defmodule Trinity.Sakana.TraceFitnessAssembler do
       (is_binary(case_id) and field(record, "case_id") == case_id) or
       field(record, "turn") == turn
   end
+
+  defp reflex_match?(record, turn, route_hash) do
+    (is_binary(route_hash) and field(record, "route_hash") == route_hash) or
+      field(record, "turn") == turn
+  end
+
+  defp maybe_put_reflex(route, reflex) when map_size(reflex) > 0 do
+    Map.put(route, "reflex", %{
+      "confidence_class" => normalize_reflex_class(field(reflex, "confidence_class")),
+      "action" => normalize_reflex_action(field(reflex, "action")),
+      "reason" => normalize_reflex_reason(field(reflex, "reason")),
+      "forced_sequence" => normalize_reflex_sequence(field(reflex, "forced_sequence"))
+    })
+  end
+
+  defp maybe_put_reflex(route, _reflex), do: route
+
+  defp normalize_reflex_class(value) when value in ["high", "medium", "low"], do: value
+  defp normalize_reflex_class(_value), do: nil
+
+  defp normalize_reflex_action(value)
+       when value in ["direct_dispatch", "normal_dispatch", "thinker_then_verifier"],
+       do: value
+
+  defp normalize_reflex_action(_value), do: nil
+
+  defp normalize_reflex_reason(value)
+       when value in [
+              "disabled",
+              "high_confidence",
+              "medium_confidence",
+              "low_margin",
+              "missing_margin",
+              "explicit_override"
+            ],
+       do: value
+
+  defp normalize_reflex_reason(_value), do: nil
+
+  defp normalize_reflex_sequence(values) when is_list(values) do
+    Enum.flat_map(values, fn
+      "thinker" -> ["thinker"]
+      "verifier" -> ["verifier"]
+      _other -> []
+    end)
+  end
+
+  defp normalize_reflex_sequence(_value), do: []
 
   defp source_kind(route) do
     case field(route, "route_path") do

@@ -56,6 +56,16 @@ defmodule Trinity.Sakana.FitnessExporterTest do
     assert summary.skipped_count == 1
   end
 
+  test "reflex datasets retain deterministic digests" do
+    trace = fixture("orchestrator_reflex_low_margin.jsonl")
+
+    assert {:ok, first} = FitnessExporter.export([trace], dry_run: true)
+    assert {:ok, second} = FitnessExporter.export([trace], dry_run: true)
+
+    assert first.dataset_digest == second.dataset_digest
+    assert first.route_hashes_digest == second.route_hashes_digest
+  end
+
   defp fixture(name), do: Path.join(@fixtures, name)
 
   defp tmp_dir(name) do

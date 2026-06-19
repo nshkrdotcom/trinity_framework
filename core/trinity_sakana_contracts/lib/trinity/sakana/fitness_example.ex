@@ -1,5 +1,10 @@
 defmodule Trinity.Sakana.FitnessExample do
-  @moduledoc "Schema-versioned, allowlisted route fitness example."
+  @moduledoc """
+  Schema-versioned, allowlisted route fitness example.
+
+  Route maps may include an optional allowlisted `"reflex"` map. Legacy
+  examples without reflex evidence remain valid under the v1 schema.
+  """
 
   @schema_version "trinity.sakana.fitness_example.v1"
   @map_fields [:source, :input, :route, :outcome, :fitness, :provenance]

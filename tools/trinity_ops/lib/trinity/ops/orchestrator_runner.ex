@@ -27,16 +27,17 @@ defmodule Trinity.Ops.OrchestratorRunner do
     run_ref = Keyword.get(opts, :run_id, "orchestrator-demo")
     messages = [%{role: "user", content: Keyword.get(opts, :message, @default_message)}]
 
-    context = %{
-      profile: profile,
-      provider_pool: provider_pool,
-      trace_path: trace_path,
-      run_ref: run_ref,
-      mock?: mock?,
-      allow_live?: allow_live?
-    }
-
-    with :ok <- ensure_runtime_started(),
+    with {:ok, reflex} <- reflex_config(opts),
+         context <- %{
+           profile: profile,
+           provider_pool: provider_pool,
+           trace_path: trace_path,
+           run_ref: run_ref,
+           mock?: mock?,
+           allow_live?: allow_live?,
+           reflex: reflex
+         },
+         :ok <- ensure_runtime_started(),
          :ok <- validate_provider_gate(mock?, allow_live?),
          :ok <- prepare_trace(trace_path),
          {:ok, loaded_runtime} <-
@@ -54,18 +55,23 @@ defmodule Trinity.Ops.OrchestratorRunner do
            CoordinatorCore.run_loop(
              messages,
              orchestrator_opts(opts, loaded_runtime, plan, context)
-           ) do
+           ),
+         {:ok, reflex_summary} <- reflex_summary(trace_path) do
       {:ok,
-       %{
-         ok: true,
-         status: :finished,
-         runtime_profile: profile,
-         provider_pool: provider_pool,
-         trace_path: trace_path,
-         run_id: run_ref,
-         turns: result.turns,
-         final_response_ref: hash_ref("response", result.response)
-       }}
+       Map.merge(
+         %{
+           ok: true,
+           status: :finished,
+           runtime_profile: profile,
+           provider_pool: provider_pool,
+           trace_path: trace_path,
+           run_id: run_ref,
+           turns: result.turns,
+           final_response_ref: hash_ref("response", result.response),
+           reflex_enabled: reflex.enabled?
+         },
+         reflex_summary
+       )}
     end
   end
 
@@ -79,6 +85,14 @@ defmodule Trinity.Ops.OrchestratorRunner do
       agent_caller: AgentCaller,
       agent_opts: agent_opts(context.provider_pool, context.mock?, context.allow_live?),
       max_turns: max(Keyword.get(opts, :max_turns, 3), 1),
+      reflex_enabled?: context.reflex.enabled?,
+      reflex_margin_mode: context.reflex.margin_mode,
+      reflex_high_agent_margin: Keyword.get(opts, :reflex_high_agent_margin),
+      reflex_high_role_margin: Keyword.get(opts, :reflex_high_role_margin),
+      reflex_low_agent_margin: Keyword.get(opts, :reflex_low_agent_margin),
+      reflex_low_role_margin: Keyword.get(opts, :reflex_low_role_margin),
+      reflex_missing_margin: context.reflex.missing_margin,
+      reflex_force_sequence: [:thinker, :verifier],
       coordination_run_ref: context.run_ref,
       trace_ref: context.run_ref,
       runtime_profile: context.profile,
@@ -157,6 +171,65 @@ defmodule Trinity.Ops.OrchestratorRunner do
     File.rm(path)
     :ok
   end
+
+  defp reflex_config(opts) do
+    with {:ok, enabled?} <- reflex_enabled(Keyword.get(opts, :reflex, true)),
+         {:ok, margin_mode} <-
+           reflex_margin_mode(Keyword.get(opts, :reflex_margin_mode, "profile_floor")),
+         {:ok, missing_margin} <-
+           reflex_missing_margin(Keyword.get(opts, :reflex_missing_margin, "medium")) do
+      {:ok, %{enabled?: enabled?, margin_mode: margin_mode, missing_margin: missing_margin}}
+    end
+  end
+
+  defp reflex_enabled(value) when is_boolean(value), do: {:ok, value}
+  defp reflex_enabled(value), do: {:error, {:invalid_reflex_enabled, value}}
+
+  defp reflex_margin_mode(:profile_floor), do: {:ok, :profile_floor}
+  defp reflex_margin_mode("profile_floor"), do: {:ok, :profile_floor}
+  defp reflex_margin_mode(:absolute), do: {:ok, :absolute}
+  defp reflex_margin_mode("absolute"), do: {:ok, :absolute}
+  defp reflex_margin_mode(value), do: {:error, {:invalid_reflex_margin_mode, value}}
+
+  defp reflex_missing_margin(:medium), do: {:ok, :medium}
+  defp reflex_missing_margin("medium"), do: {:ok, :medium}
+  defp reflex_missing_margin(:low), do: {:ok, :low}
+  defp reflex_missing_margin("low"), do: {:ok, :low}
+
+  defp reflex_missing_margin(value),
+    do: {:error, {:invalid_reflex_missing_margin, value}}
+
+  defp reflex_summary(path) do
+    path
+    |> File.stream!()
+    |> Enum.reduce_while({:ok, []}, fn line, {:ok, records} ->
+      case Jason.decode(String.trim(line)) do
+        {:ok, %{"event" => "reflex_decision"} = record} ->
+          {:cont, {:ok, [record | records]}}
+
+        {:ok, _record} ->
+          {:cont, {:ok, records}}
+
+        {:error, reason} ->
+          {:halt, {:error, {:invalid_reflex_trace, reason}}}
+      end
+    end)
+    |> case do
+      {:ok, records} ->
+        {:ok,
+         %{
+           reflex_decisions: length(records),
+           direct_dispatch_count: action_count(records, "direct_dispatch"),
+           normal_dispatch_count: action_count(records, "normal_dispatch"),
+           thinker_then_verifier_count: action_count(records, "thinker_then_verifier")
+         }}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp action_count(records, action), do: Enum.count(records, &(&1["action"] == action))
 
   defp trace_content(:full), do: :full
   defp trace_content("full"), do: :full

@@ -111,6 +111,32 @@ defmodule Trinity.Sakana.TraceFitnessAssemblerTest do
     refute String.contains?(encoded, "raw_response_body")
   end
 
+  test "attaches allowlisted reflex metadata by run turn and route hash" do
+    %{examples: [example]} =
+      "orchestrator_reflex_low_margin.jsonl"
+      |> read()
+      |> TraceFitnessAssembler.assemble()
+
+    assert example.route["reflex"] == %{
+             "confidence_class" => "low",
+             "action" => "thinker_then_verifier",
+             "reason" => "low_margin",
+             "forced_sequence" => ["thinker", "verifier"]
+           }
+
+    encoded = Jason.encode!(example)
+    refute String.contains?(encoded, "REFLEX-SECRET")
+    refute String.contains?(encoded, "REFLEX RAW PROMPT")
+    refute String.contains?(encoded, "forced_secret")
+  end
+
+  test "legacy traces without reflex decisions remain valid" do
+    %{examples: [example]} =
+      "orchestrator_accept.jsonl" |> read() |> TraceFitnessAssembler.assemble()
+
+    refute Map.has_key?(example.route, "reflex")
+  end
+
   defp read(name) do
     {:ok, result} = TraceFitnessReader.read([Path.join(@fixtures, name)])
     result.records

@@ -309,7 +309,8 @@ defmodule Trinity.CoordinatorCoreTest do
                model_runtime: Runtime,
                model_state: :loaded,
                agent_caller: Caller,
-               max_turns: 3
+               max_turns: 3,
+               reflex_enabled?: false
              )
 
     assert result.response == "ACCEPT: correct"
@@ -375,6 +376,7 @@ defmodule Trinity.CoordinatorCoreTest do
                model_state: :loaded,
                agent_caller: RevisingCaller,
                max_turns: 2,
+               reflex_enabled?: false,
                coordination_run_ref: "run:revise-count",
                trace_sink: TestTraceSink,
                trace: [test_pid: self()]
@@ -458,7 +460,8 @@ defmodule Trinity.CoordinatorCoreTest do
                model_runtime: ThinkerRuntime,
                model_state: :loaded,
                agent_caller: Caller,
-               max_turns: 2
+               max_turns: 2,
+               reflex_enabled?: false
              )
 
     assert result.response == "Worker answer: 42"

@@ -14,6 +14,9 @@ assembly are owned here through explicit package boundaries.
 6. Expose Crucible as the reusable route path without hard-wiring it to Qwen.
 7. Close the route-evidence loop with Orchestrator-backed, allowlisted Sakana
    fitness datasets for external ES training.
+8. Make router confidence operational through the Orchestrator reflex policy:
+   high margins dispatch directly, medium margins preserve normal behavior,
+   and low margins force Thinker before Verifier.
 
 ## Evolution Boundary
 
@@ -35,6 +38,9 @@ directions.
 - CUDA/adapted checks are documented and run on capable hosts.
 - `mix trinity.orchestrator.demo` produces verifier/budget-bearing traces and
   `mix trinity.sakana.fitness_export` converts them into deterministic datasets.
+- Route confidence appears as `reflex_decision` evidence, and low-confidence
+  Orchestrator runs exercise Thinker-to-Verifier escalation without creating a
+  separate agent loop.
 - Verifier revision counts describe state after the current decision, and
   exported fitness examples contain only allowlisted trace fields.
 - External training can return a reviewed router vector to the existing

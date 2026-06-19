@@ -335,6 +335,7 @@ defmodule TrinityFramework.MixProject do
         "docs/production_qwen_slm_profile.md",
         "docs/production_runbook.md",
         "docs/provider_smoke_tests.md",
+        "docs/router_reflex.md",
         "docs/sakana_adapted_artifact_plan.md",
         "docs/sakana_fitness_export.md",
         "docs/sakana_svd_byte_match_rigor_plan.md",
@@ -352,7 +353,8 @@ defmodule TrinityFramework.MixProject do
           "guides/trinity_live_inspect.md",
           "guides/runtime_profiles.md",
           "guides/service_buildout.md",
-          "guides/router_fabric.md"
+          "guides/router_fabric.md",
+          "docs/router_reflex.md"
         ],
         "Artifacts & Pipelines": [
           "guides/artifacts_and_export.md",

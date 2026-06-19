@@ -5,6 +5,12 @@ defmodule Trinity.Coordinator.RunGovernance do
 
   @direct_top_fields [:provider_pool, :agent_pool_opts]
   @required_refs [:authority_ref, :workflow_ref, :runtime_ref]
+  @reflex_threshold_fields [
+    :reflex_high_agent_margin,
+    :reflex_high_role_margin,
+    :reflex_low_agent_margin,
+    :reflex_low_role_margin
+  ]
 
   @enforce_keys [:authority_ref, :workflow_ref, :runtime_ref]
   defstruct [
@@ -22,19 +28,26 @@ defmodule Trinity.Coordinator.RunGovernance do
 
   @spec materialize_orchestrator_opts(keyword()) :: {:ok, keyword()} | {:error, term()}
   def materialize_orchestrator_opts(opts) when is_list(opts) do
-    case Keyword.get(opts, :governed_authority) do
-      nil ->
-        {:ok, opts}
-
-      authority_input ->
-        with :ok <- reject_direct_fields(opts),
-             {:ok, authority} <- new(authority_input) do
-          {:ok, merge_authority_opts(opts, authority)}
-        end
+    with {:ok, opts} <- materialize_reflex_opts(opts) do
+      materialize_governed_authority_opts(opts)
     end
   end
 
   def materialize_orchestrator_opts(_opts), do: {:error, :invalid_orchestrator_opts}
+
+  defp materialize_governed_authority_opts(opts) do
+    case Keyword.get(opts, :governed_authority) do
+      nil -> {:ok, opts}
+      authority_input -> materialize_governed_authority_opts(opts, authority_input)
+    end
+  end
+
+  defp materialize_governed_authority_opts(opts, authority_input) do
+    with :ok <- reject_direct_fields(opts),
+         {:ok, authority} <- new(authority_input) do
+      {:ok, merge_authority_opts(opts, authority)}
+    end
+  end
 
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
   def new(input) when is_list(input) or is_map(input) do
@@ -62,6 +75,68 @@ defmodule Trinity.Coordinator.RunGovernance do
   defp reject_direct_fields(opts) do
     fields = Enum.filter(@direct_top_fields, &Keyword.has_key?(opts, &1))
     if fields == [], do: :ok, else: {:error, {:governed_direct_fields_rejected, fields}}
+  end
+
+  defp materialize_reflex_opts(opts) do
+    with {:ok, enabled?} <- reflex_boolean(Keyword.get(opts, :reflex_enabled?, true)),
+         {:ok, policy} <- reflex_policy(Keyword.get(opts, :reflex_policy)),
+         {:ok, margin_mode} <-
+           reflex_margin_mode(Keyword.get(opts, :reflex_margin_mode, :profile_floor)),
+         {:ok, missing_margin} <-
+           reflex_missing_margin(Keyword.get(opts, :reflex_missing_margin, :medium)),
+         {:ok, force_sequence} <-
+           reflex_force_sequence(Keyword.get(opts, :reflex_force_sequence, [:thinker, :verifier])),
+         :ok <- validate_reflex_thresholds(opts) do
+      {:ok,
+       opts
+       |> Keyword.put(:reflex_enabled?, enabled?)
+       |> Keyword.put(:reflex_policy, policy)
+       |> Keyword.put(:reflex_margin_mode, margin_mode)
+       |> Keyword.put(:reflex_missing_margin, missing_margin)
+       |> Keyword.put(:reflex_force_sequence, force_sequence)}
+    end
+  end
+
+  defp reflex_boolean(value) when is_boolean(value), do: {:ok, value}
+  defp reflex_boolean(value), do: {:error, {:invalid_reflex_enabled, value}}
+
+  defp reflex_policy(nil), do: {:ok, Trinity.Coordinator.ReflexPolicy}
+
+  defp reflex_policy(module) when is_atom(module) do
+    if Code.ensure_loaded?(module) and function_exported?(module, :evaluate, 2),
+      do: {:ok, module},
+      else: {:error, {:invalid_reflex_policy, module}}
+  end
+
+  defp reflex_policy(value), do: {:error, {:invalid_reflex_policy, value}}
+
+  defp reflex_margin_mode(:profile_floor), do: {:ok, :profile_floor}
+  defp reflex_margin_mode("profile_floor"), do: {:ok, :profile_floor}
+  defp reflex_margin_mode(:absolute), do: {:ok, :absolute}
+  defp reflex_margin_mode("absolute"), do: {:ok, :absolute}
+  defp reflex_margin_mode(value), do: {:error, {:invalid_reflex_margin_mode, value}}
+
+  defp reflex_missing_margin(:medium), do: {:ok, :medium}
+  defp reflex_missing_margin("medium"), do: {:ok, :medium}
+  defp reflex_missing_margin(:low), do: {:ok, :low}
+  defp reflex_missing_margin("low"), do: {:ok, :low}
+
+  defp reflex_missing_margin(value),
+    do: {:error, {:invalid_reflex_missing_margin, value}}
+
+  defp reflex_force_sequence([:thinker, :verifier]), do: {:ok, [:thinker, :verifier]}
+
+  defp reflex_force_sequence(value),
+    do: {:error, {:invalid_reflex_force_sequence, value}}
+
+  defp validate_reflex_thresholds(opts) do
+    case Enum.find(@reflex_threshold_fields, fn field ->
+           value = Keyword.get(opts, field)
+           not is_nil(value) and (not is_number(value) or value < 0)
+         end) do
+      nil -> :ok
+      field -> {:error, {:invalid_reflex_threshold, field, Keyword.get(opts, field)}}
+    end
   end
 
   defp merge_authority_opts(opts, authority) do

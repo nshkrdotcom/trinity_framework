@@ -11,8 +11,8 @@ storage.
 - `Trinity.Bridge.Trace.JSONL` and `JsonlSink` for local JSONL output.
 - AITrace-shaped payloads through `trinity_bridge_trace`.
 - Orchestrator lifecycle events used by Sakana fitness export:
-  `route_decision`, dispatch start/finish, `verifier_result`, budget snapshots,
-  and terminal run events.
+  `route_decision`, `reflex_decision`, dispatch start/finish,
+  `verifier_result`, budget snapshots, and terminal run events.
 
 ## Rules
 
@@ -28,6 +28,14 @@ storage.
 Operator commands accept `--trace-out` where route/demo flows emit trace files.
 `mix trinity.orchestrator.demo` is the fitness-bearing producer; the legacy
 smoke loop is not treated as Orchestrator outcome evidence.
+
+For reflex-enabled Orchestrator runs, trace ordering starts with
+`route_decision`, then `reflex_decision`, then the turn-start budget snapshot,
+provider dispatch events, optional verifier result, follow-up budget snapshot,
+and a terminal `run_finished` or `run_failed` event. `reflex_decision` contains
+classification/action metadata only; it does not contain raw messages, provider
+credentials, provider headers, raw request bodies, raw response bodies, or
+endpoint authentication.
 
 `mix trinity.sakana.fitness_export` streams these JSONL records and builds each
 example by copying a fixed field allowlist. It never merges source payloads,

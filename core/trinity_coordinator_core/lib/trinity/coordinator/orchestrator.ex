@@ -37,7 +37,12 @@ defmodule Trinity.Coordinator.Orchestrator do
   defdelegate check_budgets(run_ctx, checkpoint, extras \\ %{}), to: Budgets, as: :check
 
   defp do_loop(pid, run_ctx) do
-    loop_state = %{latest_worker_response: nil, next_role_override: nil}
+    loop_state = %{
+      latest_worker_response: nil,
+      next_role_override: nil,
+      next_role_override_source: nil
+    }
+
     turn(pid, run_ctx, loop_state, 0)
   end
 
@@ -55,20 +60,24 @@ defmodule Trinity.Coordinator.Orchestrator do
   end
 
   defp do_turn(pid, run_ctx, loop_state, turn) do
-    with :ok <- check_budget(run_ctx, :turn_start, %{turn: turn}),
-         messages <- StateManager.get_messages(pid),
+    with messages <- StateManager.get_messages(pid),
          {:ok, route_result} <- route(messages, run_ctx, turn),
          {:ok, decision} <- derive_route_decision(route_result, messages, run_ctx.decision_attrs),
-         route <- apply_role_override(decision, loop_state),
+         {route, loop_state} <- apply_role_override(decision, loop_state),
+         {:ok, reflex} <- evaluate_reflex(route, run_ctx),
+         {dispatch_route, loop_state} <- apply_reflex(route, reflex, loop_state),
          :ok <- emit_route_decision(run_ctx, route, messages, turn),
-         :ok <- ensure_role_dispatch_allowed(route.role_atom, loop_state),
+         :ok <- emit_reflex_decision(run_ctx, route, reflex, turn),
+         :ok <- check_budget(run_ctx, :turn_start, %{turn: turn}),
+         :ok <- ensure_role_dispatch_allowed(dispatch_route, loop_state, reflex),
          :ok <- bump_provider_call(run_ctx, turn),
-         {:ok, response_text, receipt, latency_ms} <- dispatch(messages, route, run_ctx, turn),
+         {:ok, response_text, receipt, latency_ms} <-
+           dispatch(messages, dispatch_route, run_ctx, turn),
          :ok <- check_provider_latency(run_ctx, latency_ms, turn),
          :ok <- budget_cost(run_ctx, receipt, turn),
          :ok <- StateManager.append_assistant(pid, response_text),
          {:cont, next_state} <-
-           handle_role_response(route, response_text, loop_state, run_ctx, turn) do
+           handle_role_response(dispatch_route, response_text, loop_state, run_ctx, turn) do
       turn(pid, run_ctx, next_state, turn + 1)
     else
       {:halt, response_text} -> {:ok, result(pid, response_text, turn + 1)}
@@ -91,6 +100,10 @@ defmodule Trinity.Coordinator.Orchestrator do
 
   defp derive_route_decision(%CrucibleRouteDecision{} = route_decision, messages, attrs) do
     RouteDecisionDerivation.from_crucible(route_decision, messages, attrs)
+  end
+
+  defp evaluate_reflex(route, run_ctx) do
+    run_ctx.reflex_policy.evaluate(route, run_ctx.reflex_opts)
   end
 
   defp dispatch(messages, route, run_ctx, turn) do
@@ -241,10 +254,20 @@ defmodule Trinity.Coordinator.Orchestrator do
     handle_verifier_status(parsed, response_text, loop_state, run_ctx, route, turn)
   end
 
+  defp handle_role_response(
+         %{role_atom: :thinker, force_verifier_after?: true},
+         _response_text,
+         loop_state,
+         _run_ctx,
+         _turn
+       ) do
+    {:cont, schedule_role_override(loop_state, :verifier, :reflex)}
+  end
+
   defp handle_role_response(%{role_atom: :thinker}, response_text, loop_state, _run_ctx, _turn) do
     case Thinker.parse(response_text) do
       %Thinker{suggested_role_id: role_id} when is_integer(role_id) ->
-        {:cont, %{loop_state | next_role_override: role_id}}
+        {:cont, schedule_role_override(loop_state, role_id, :thinker)}
 
       _ ->
         {:cont, loop_state}
@@ -252,7 +275,13 @@ defmodule Trinity.Coordinator.Orchestrator do
   end
 
   defp handle_role_response(%{role_atom: :worker}, response_text, loop_state, _run_ctx, _turn) do
-    {:cont, %{loop_state | latest_worker_response: response_text, next_role_override: nil}}
+    {:cont,
+     %{
+       loop_state
+       | latest_worker_response: response_text,
+         next_role_override: nil,
+         next_role_override_source: nil
+     }}
   end
 
   defp handle_role_response(_route, _response_text, loop_state, _run_ctx, _turn),
@@ -281,16 +310,34 @@ defmodule Trinity.Coordinator.Orchestrator do
     end
   end
 
-  defp apply_role_override(decision, %{next_role_override: role_id}) when is_integer(role_id) do
-    %{
-      route_from_decision(decision)
-      | selected_role_id: role_id,
-        role_name: RoleInjector.role_name(role_id),
-        role_atom: RoleInjector.role_atom(role_id)
-    }
+  defp apply_role_override(
+         decision,
+         %{next_role_override: role_id, next_role_override_source: source} = loop_state
+       )
+       when is_integer(role_id) do
+    route = override_route(route_from_decision(decision), role_id, source)
+
+    {route, %{loop_state | next_role_override: nil, next_role_override_source: nil}}
   end
 
-  defp apply_role_override(decision, _loop_state), do: route_from_decision(decision)
+  defp apply_role_override(decision, loop_state), do: {route_from_decision(decision), loop_state}
+
+  defp apply_reflex(route, %{enabled?: true, action: :thinker_then_verifier}, loop_state) do
+    case route.role_atom do
+      :verifier ->
+        {%{route | reflex_verifier?: true}, loop_state}
+
+      :thinker ->
+        {%{route | force_verifier_after?: true}, loop_state}
+
+      _other ->
+        {route
+         |> override_route(RoleInjector.role_id(:thinker), :reflex)
+         |> Map.put(:force_verifier_after?, true), loop_state}
+    end
+  end
+
+  defp apply_reflex(route, _reflex, loop_state), do: {route, loop_state}
 
   defp route_from_decision(decision) do
     role_name = decision.role_name || RoleInjector.role_name(decision.selected_role_id)
@@ -300,14 +347,53 @@ defmodule Trinity.Coordinator.Orchestrator do
       selected_agent_id: decision.selected_agent_id,
       selected_role_id: decision.selected_role_id,
       role_name: role_name,
-      role_atom: RoleInjector.role_atom(role_name)
+      role_atom: RoleInjector.role_atom(role_name),
+      role_override_source: nil,
+      force_verifier_after?: false,
+      reflex_verifier?: false
     }
   end
 
-  defp ensure_role_dispatch_allowed(:verifier, %{latest_worker_response: nil}),
-    do: {:error, :verifier_before_worker_response}
+  defp override_route(route, role_id, source) do
+    %{
+      route
+      | selected_role_id: role_id,
+        role_name: RoleInjector.role_name(role_id),
+        role_atom: RoleInjector.role_atom(role_id),
+        role_override_source: source
+    }
+  end
 
-  defp ensure_role_dispatch_allowed(_role, _state), do: :ok
+  defp schedule_role_override(loop_state, role, source) do
+    %{
+      loop_state
+      | next_role_override: RoleInjector.role_id(role) || role,
+        next_role_override_source: source
+    }
+  end
+
+  defp ensure_role_dispatch_allowed(
+         %{role_atom: :verifier, role_override_source: :reflex},
+         _loop_state,
+         _reflex
+       ),
+       do: :ok
+
+  defp ensure_role_dispatch_allowed(
+         %{role_atom: :verifier, reflex_verifier?: true},
+         _state,
+         _reflex
+       ),
+       do: :ok
+
+  defp ensure_role_dispatch_allowed(
+         %{role_atom: :verifier},
+         %{latest_worker_response: nil},
+         _reflex
+       ),
+       do: {:error, :verifier_before_worker_response}
+
+  defp ensure_role_dispatch_allowed(_route, _state, _reflex), do: :ok
 
   defp receipt_text(%AgentCallReceipt{status: status, metadata: metadata})
        when status in [:ok, :complete] do
@@ -404,6 +490,30 @@ defmodule Trinity.Coordinator.Orchestrator do
         else: payload
 
     emit_event(run_ctx, :route_decision, payload)
+  end
+
+  defp emit_reflex_decision(run_ctx, route, reflex, turn) do
+    payload = %{
+      turn: turn,
+      route_hash: route.decision.route_hash,
+      selected_agent_id: route.selected_agent_id,
+      selected_role_id: route.selected_role_id,
+      original_role_name: route.role_name,
+      original_role_atom: route.role_atom,
+      confidence_class: reflex.confidence_class,
+      action: reflex.action,
+      reason: reflex.reason,
+      agent_margin: reflex.agent_margin,
+      role_margin: reflex.role_margin,
+      min_margin: reflex.min_margin,
+      confidence_band: reflex.confidence_band,
+      thresholds: reflex.thresholds,
+      forced_sequence: reflex.forced_sequence,
+      next_role_override: reflex.next_role_override,
+      reflex_enabled: reflex.enabled?
+    }
+
+    emit_event(run_ctx, :reflex_decision, payload)
   end
 
   defp emit_verifier_result(run_ctx, route, parsed, response_text, turn) do
@@ -573,7 +683,10 @@ defmodule Trinity.Coordinator.Orchestrator do
          provider_pool: Keyword.get(opts, :provider_pool),
          route_path: Keyword.get(opts, :route_path, :orchestrator),
          trace_content: Keyword.get(opts, :trace_content, :hash),
-         dispatch_metadata_fn: Keyword.get(opts, :dispatch_metadata_fn)
+         dispatch_metadata_fn: Keyword.get(opts, :dispatch_metadata_fn),
+         reflex_enabled?: Keyword.fetch!(opts, :reflex_enabled?),
+         reflex_policy: Keyword.fetch!(opts, :reflex_policy),
+         reflex_opts: reflex_opts(opts)
        }}
     end
   end
@@ -602,6 +715,19 @@ defmodule Trinity.Coordinator.Orchestrator do
       adapter_ref: "adapter:core",
       messages: []
     }
+  end
+
+  defp reflex_opts(opts) do
+    Keyword.take(opts, [
+      :reflex_enabled?,
+      :reflex_margin_mode,
+      :reflex_high_agent_margin,
+      :reflex_high_role_margin,
+      :reflex_low_agent_margin,
+      :reflex_low_role_margin,
+      :reflex_missing_margin,
+      :reflex_force_sequence
+    ])
   end
 
   defp result(pid, response, turns),

@@ -23,10 +23,18 @@ role injection, verifier parsing, revision counters, provider budgets, latency
 checks, and terminal status. Live provider execution is rejected unless
 `--allow-live` is explicit.
 
-The trace contains route decisions, dispatch start/finish records, verifier
-results, budget snapshots, and run completion or failure. Hash content is the
-default; credentials, request headers, provider payloads, and raw prompts are
-not fitness fields.
+The trace contains route decisions, reflex decisions, dispatch start/finish
+records, verifier results, budget snapshots, and run completion or failure.
+Hash content is the default; credentials, request headers, provider payloads,
+and raw prompts are not fitness fields.
+
+Router reflex makes confidence operational before dispatch. High-confidence
+routes record `direct_dispatch`, medium-confidence routes record
+`normal_dispatch`, and low-confidence routes record `thinker_then_verifier` and
+force Thinker before Verifier. The exporter preserves this metadata under
+`route.reflex` when present, but the score-v1 formula still uses verifier
+outcome, margins, revisions, latency, cost, and budget state. Reflex affects
+fitness indirectly through those outcomes.
 
 `verifier_result.revision_count` is the cumulative count after applying that
 decision. A first `revise`/`revised` result therefore records `1`; an accepted
@@ -74,6 +82,17 @@ mix run lib/qwen_router_prompt_eval.exs -- \
 During assembly, eval status `ok` maps to an accepted eval outcome, `fail` maps
 to rejected, and `report` maps to unknown.
 
+The eval can also write analysis-only reflex records:
+
+```bash
+mix run lib/qwen_router_prompt_eval.exs -- \
+  --runtime-profile mock_tiny \
+  --reflex-report \
+  --reflex-trace-out ../../tmp/sakana_fitness/qwen_reflex_trace.jsonl
+```
+
+This does not change strict snapshot or route-decision pass/fail behavior.
+
 ## External Evolution Loop
 
 1. Produce Orchestrator and/or Qwen eval traces.
@@ -105,3 +124,7 @@ Example IDs, dataset digests, and route-hash digests are deterministic. The
 manifest records source paths, counts, formula version, margin/content modes,
 artifact references, runtime profiles, conflicts, and skipped records. The
 assembler never merges a raw trace payload into an example.
+
+Reflex metadata is copied through the same allowlist discipline as route,
+dispatch, verifier, budget, artifact, and runtime fields. Older traces without
+`reflex_decision` still export.

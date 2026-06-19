@@ -227,10 +227,18 @@ legacy smoke loop or duplicate routing, verifier, revision, or budget logic.
 Mock mode is deterministic and needs no network, CUDA artifact, or provider
 credential; live provider execution requires explicit `--allow-live`.
 
+Router confidence is operational in the Orchestrator. High-confidence routes
+record `direct_dispatch` and dispatch immediately, medium-confidence routes
+record `normal_dispatch` and keep the current behavior, and low-confidence
+routes record `thinker_then_verifier` and force Thinker before Verifier. Disable
+this only for legacy comparisons with `--no-reflex`; see
+[Router Reflex](docs/router_reflex.md).
+
 Each trace contains route, provider dispatch, verifier, budget, and terminal
-run events. A verifier `revision_count` is cumulative after applying the
-current verifier decision, so a first `revise` event carries `1` and receives
-the revision penalty on that route. Accepted decisions do not increment it.
+run events, including `reflex_decision` when reflex is enabled. A verifier
+`revision_count` is cumulative after applying the current verifier decision, so
+a first `revise` event carries `1` and receives the revision penalty on that
+route. Accepted decisions do not increment it.
 
 The exporter streams string-key JSONL and copies a fixed field allowlist. Hash
 content mode is the default; `--content full` is the only mode that can carry
@@ -251,6 +259,17 @@ This feature scores and exports evidence only. External ES owns candidate
 generation, optimization, and weight mutation; the framework resumes ownership
 at router-vector validation, adapted artifact export, parity, eval, and CUDA
 acceptance. See [Sakana Fitness Export](docs/sakana_fitness_export.md).
+
+Reflex classification can also be reported during the Qwen prompt eval without
+changing strict eval semantics:
+
+```bash
+cd examples/qwen_router_prompt_eval
+mix run lib/qwen_router_prompt_eval.exs -- \
+  --runtime-profile mock_tiny \
+  --reflex-report \
+  --reflex-trace-out ../../tmp/sakana_fitness/qwen_reflex_trace.jsonl
+```
 
 ## Generate Safetensors
 
@@ -349,7 +368,7 @@ mix trinity.hitl.gpu                   # GPU/EXLA CUDA visibility check
 mix trinity.hitl.head_route            # Hidden-state to Sakana-head route check
 mix trinity.hitl.mock_loop             # Mock orchestrator loop check
 mix trinity.hitl.vector                # Sakana router-vector split check
-mix trinity.orchestrator.demo          # Produce Orchestrator-backed fitness traces
+mix trinity.orchestrator.demo          # Produce Orchestrator/reflex fitness traces
 mix trinity.parity.check               # Python/Elixir parity comparator wrapper
 mix trinity.route.demo                 # Gated route demo
 mix trinity.sakana.export_adapted      # Export adapted Qwen tensors and router head
@@ -394,6 +413,7 @@ acceptable for sign-off.
 - [Artifact Distribution](guides/artifact_distribution.md)
 - [Artifacts And Export](guides/artifacts_and_export.md)
 - [Sakana Fitness Export](docs/sakana_fitness_export.md)
+- [Router Reflex](docs/router_reflex.md)
 - [Runtime Profiles](guides/runtime_profiles.md)
 - [Evals](guides/evals.md)
 - [Python Parity Reconstruction](guides/python_parity_reconstruction.md)

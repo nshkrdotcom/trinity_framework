@@ -70,6 +70,10 @@ defmodule Trinity.Ops.Tasks do
   defp print_summary(summary, false) do
     Mix.shell().info("TRINITY Orchestrator demo: PASS")
     Mix.shell().info("Trace: #{summary.trace_path}")
+    Mix.shell().info("Reflex decisions: #{summary.reflex_decisions}")
+    Mix.shell().info("Direct dispatch: #{summary.direct_dispatch_count}")
+    Mix.shell().info("Normal dispatch: #{summary.normal_dispatch_count}")
+    Mix.shell().info("Thinker then Verifier: #{summary.thinker_then_verifier_count}")
     :ok
   end
 

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Add confidence-driven router reflex: high-confidence routes dispatch
+  directly, medium-confidence routes keep normal Orchestrator behavior, and
+  low-confidence routes force Thinker before Verifier with traceable
+  `reflex_decision` events.
 - Add Orchestrator-backed lifecycle traces and deterministic, allowlisted
   Sakana fitness dataset export for external router evolution.
 - Define verifier trace revision counts as post-decision cumulative state so

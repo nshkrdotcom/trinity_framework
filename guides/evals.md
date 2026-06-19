@@ -65,6 +65,23 @@ The trace writer emits two records per case and keeps determinism replays on the
 same case identity. Mock-profile cases are report-only evidence; CUDA Qwen
 snapshot acceptance remains the release-grade route proof.
 
+## Reflex Classification Report
+
+Router reflex can be reported during the eval without changing strict route
+assertions:
+
+```bash
+mix run lib/qwen_router_prompt_eval.exs -- \
+  --runtime-profile mock_tiny \
+  --reflex-report \
+  --reflex-trace-out ../../tmp/reflex_smoke/qwen_reflex.jsonl
+```
+
+`--reflex-report` prints per-case confidence class/action and aggregate counts.
+`--reflex-trace-out` writes paired `route_decision` and `reflex_decision`
+records for downstream inspection. Neither flag changes expected agent ids,
+role ids, snapshot comparison, determinism checks, or pass/fail semantics.
+
 ## Debug Native Logs
 
 ```bash

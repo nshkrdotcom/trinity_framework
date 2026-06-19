@@ -31,7 +31,11 @@ defmodule Trinity.Examples.QwenRouterPromptEval.TraceOutTest do
     assert route["event"] == "route_decision"
     assert route["case_id"] == "math_direct"
     assert route["route_path"] == "qwen_router_prompt_eval"
+    assert route["runtime_profile"] == "mock_tiny"
     assert is_binary(route["route_hash"])
+    refute Map.has_key?(route, "artifact_root")
+    refute Map.has_key?(route, "artifact_manifest_path")
+    refute Map.has_key?(route, "local_artifact_root")
     assert eval["event"] == "route_eval_result"
     assert eval["status"] == "report"
     assert eval["expected_agent_id"] == 4

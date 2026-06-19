@@ -7,7 +7,7 @@ defmodule Trinity.Examples.QwenRouterPromptEval do
 
   alias SelfHostedInferenceBumblebee.Runtime.Profile
   alias Trinity.Bridge.Trace.JsonlSink
-  alias Trinity.Coordinator.{RoleInjector, TraceEvent}
+  alias Trinity.Coordinator.{ReflexPolicy, RoleInjector, TraceEvent}
   alias Trinity.Examples.QwenRouterPromptEval.SnapshotResolver
   alias Trinity.SingleNode
 
@@ -46,6 +46,13 @@ defmodule Trinity.Examples.QwenRouterPromptEval do
           min_agent_margin: :float,
           min_role_margin: :float,
           no_assert: :boolean,
+          reflex_high_agent_margin: :float,
+          reflex_high_role_margin: :float,
+          reflex_low_agent_margin: :float,
+          reflex_low_role_margin: :float,
+          reflex_margin_mode: :string,
+          reflex_report: :boolean,
+          reflex_trace_out: :string,
           runtime_profile: :string,
           show_logits: :boolean,
           snapshot: :string,
@@ -132,7 +139,11 @@ defmodule Trinity.Examples.QwenRouterPromptEval do
     show_logits? = Keyword.get(opts, :show_logits, false)
     verbose? = Keyword.get(opts, :verbose, false) or show_logits?
     determinism_runs = max(1, Keyword.get(opts, :determinism_runs, 1))
-    prepare_trace_out(Keyword.get(opts, :trace_out))
+    trace_out = Keyword.get(opts, :trace_out)
+    reflex_trace_out = Keyword.get(opts, :reflex_trace_out)
+    validate_trace_paths!(trace_out, reflex_trace_out)
+    prepare_trace_out(trace_out)
+    prepare_trace_out(reflex_trace_out)
 
     {:ok, runtime} =
       SingleNode.load_runtime(
@@ -169,19 +180,42 @@ defmodule Trinity.Examples.QwenRouterPromptEval do
         )
       end)
 
+    results = maybe_attach_reflex!(results, opts, reflex_trace_out)
+
     determinism_failures =
-      if determinism_runs > 1 do
-        verify_determinism!(runtime, cases, results, determinism_runs,
-          artifact_dir: artifact_dir,
-          profile: profile
-        )
-      else
-        []
-      end
+      maybe_verify_determinism!(runtime, cases, results, determinism_runs,
+        artifact_dir: artifact_dir,
+        profile: profile
+      )
 
+    write_outputs!(results, opts, profile, trace_out, reflex_trace_out)
+    maybe_print_reflex_report(results, opts)
+    finish_eval!(results, determinism_failures)
+  end
+
+  defp maybe_attach_reflex!(results, opts, reflex_trace_out) do
+    if Keyword.get(opts, :reflex_report, false) or is_binary(reflex_trace_out),
+      do: Enum.map(results, &attach_reflex!(&1, reflex_options!(opts))),
+      else: results
+  end
+
+  defp maybe_verify_determinism!(_runtime, _cases, _results, runs, _opts) when runs <= 1,
+    do: []
+
+  defp maybe_verify_determinism!(runtime, cases, results, runs, opts),
+    do: verify_determinism!(runtime, cases, results, runs, opts)
+
+  defp write_outputs!(results, opts, profile, trace_out, reflex_trace_out) do
     if path = Keyword.get(opts, :snapshot_out), do: write_snapshot!(results, path)
-    if path = Keyword.get(opts, :trace_out), do: write_trace!(results, path, profile)
+    if path = trace_out, do: write_trace!(results, path, profile)
+    if path = reflex_trace_out, do: write_reflex_trace!(results, path, profile)
+  end
 
+  defp maybe_print_reflex_report(results, opts) do
+    if Keyword.get(opts, :reflex_report, false), do: print_reflex_report(results)
+  end
+
+  defp finish_eval!(results, determinism_failures) do
     failures =
       Enum.filter(results, &(&1.status == :fail)) ++
         Enum.map(determinism_failures, fn id -> %{id: id, status: :fail} end)
@@ -238,7 +272,7 @@ defmodule Trinity.Examples.QwenRouterPromptEval do
       route_hash: decision.route_hash,
       confidence_band: decision.confidence_band,
       role_name: decision.role_name,
-      runtime_profile: decision.runtime_profile,
+      runtime_profile: opts[:profile],
       artifact_identity: decision.artifact_identity
     }
   end
@@ -251,34 +285,15 @@ defmodule Trinity.Examples.QwenRouterPromptEval do
     :ok
   end
 
+  defp validate_trace_paths!(path, path) when is_binary(path) do
+    raise ArgumentError, "--trace-out and --reflex-trace-out must use different paths"
+  end
+
+  defp validate_trace_paths!(_trace_out, _reflex_trace_out), do: :ok
+
   defp write_trace!(results, path, profile) do
     Enum.each(results, fn result ->
       run_ref = "qwen-router-prompt-eval:#{result.id}"
-      identity = result.artifact_identity || %{}
-
-      route_payload = %{
-        turn: 0,
-        case_id: result.id,
-        selected_agent_id: result.agent_id,
-        selected_role_id: result.role_id,
-        role_name: result.role_name,
-        agent_margin: result.agent_margin,
-        role_margin: result.role_margin,
-        min_margin: min(result.agent_margin, result.role_margin),
-        confidence_band: result.confidence_band,
-        token_count: result.token_count,
-        transcript_hash: result.transcript_hash,
-        input_hash: result.transcript_hash,
-        route_hash: result.route_hash,
-        runtime_profile: result.runtime_profile || profile,
-        provider_pool: nil,
-        route_path: :qwen_router_prompt_eval,
-        artifact_ref: identity_field(identity, :artifact_ref),
-        artifact_revision: identity_field(identity, :artifact_revision),
-        artifact_hash_ref:
-          identity_field(identity, :artifact_manifest_sha256_actual) ||
-            identity_field(identity, :artifact_manifest_sha256)
-      }
 
       eval_payload = %{
         turn: 0,
@@ -295,12 +310,111 @@ defmodule Trinity.Examples.QwenRouterPromptEval do
         route_hash: result.route_hash
       }
 
-      :ok = emit_trace_event(path, run_ref, :route_decision, route_payload)
+      :ok = emit_trace_event(path, run_ref, :route_decision, route_payload(result, profile))
       :ok = emit_trace_event(path, run_ref, :route_eval_result, eval_payload)
     end)
 
     :ok
   end
+
+  defp write_reflex_trace!(results, path, profile) do
+    Enum.each(results, fn result ->
+      run_ref = "qwen-router-prompt-eval:#{result.id}"
+      reflex = Map.fetch!(result, :reflex)
+
+      reflex_payload = %{
+        turn: 0,
+        case_id: result.id,
+        route_hash: result.route_hash,
+        selected_agent_id: result.agent_id,
+        selected_role_id: result.role_id,
+        original_role_name: result.role_name,
+        original_role_atom: RoleInjector.role_atom(result.role_id),
+        confidence_class: reflex.confidence_class,
+        action: reflex.action,
+        reason: reflex.reason,
+        agent_margin: reflex.agent_margin,
+        role_margin: reflex.role_margin,
+        min_margin: reflex.min_margin,
+        confidence_band: reflex.confidence_band,
+        thresholds: reflex.thresholds,
+        forced_sequence: reflex.forced_sequence,
+        next_role_override: reflex.next_role_override,
+        reflex_enabled: reflex.enabled?
+      }
+
+      :ok = emit_trace_event(path, run_ref, :route_decision, route_payload(result, profile))
+      :ok = emit_trace_event(path, run_ref, :reflex_decision, reflex_payload)
+    end)
+
+    :ok
+  end
+
+  defp route_payload(result, profile) do
+    identity = result.artifact_identity || %{}
+
+    %{
+      turn: 0,
+      case_id: result.id,
+      selected_agent_id: result.agent_id,
+      selected_role_id: result.role_id,
+      role_name: result.role_name,
+      agent_margin: result.agent_margin,
+      role_margin: result.role_margin,
+      min_margin: min(result.agent_margin, result.role_margin),
+      confidence_band: result.confidence_band,
+      token_count: result.token_count,
+      transcript_hash: result.transcript_hash,
+      input_hash: result.transcript_hash,
+      route_hash: result.route_hash,
+      runtime_profile: safe_runtime_profile(result.runtime_profile, profile),
+      provider_pool: nil,
+      route_path: :qwen_router_prompt_eval,
+      artifact_ref: identity_field(identity, :artifact_ref),
+      artifact_revision: identity_field(identity, :artifact_revision),
+      artifact_hash_ref:
+        identity_field(identity, :artifact_manifest_sha256_actual) ||
+          identity_field(identity, :artifact_manifest_sha256)
+    }
+  end
+
+  defp attach_reflex!(result, opts) do
+    route = %{
+      margins: %{agent: result.agent_margin, role: result.role_margin},
+      confidence_band: result.confidence_band,
+      runtime_profile: safe_runtime_profile(result.runtime_profile, nil),
+      selected_role_id: result.role_id,
+      role_name: result.role_name,
+      role_atom: RoleInjector.role_atom(result.role_id)
+    }
+
+    case ReflexPolicy.evaluate(route, opts) do
+      {:ok, reflex} -> Map.put(result, :reflex, reflex)
+      {:error, reason} -> raise ArgumentError, "invalid reflex options: #{inspect(reason)}"
+    end
+  end
+
+  defp reflex_options!(opts) do
+    [
+      reflex_enabled?: true,
+      reflex_margin_mode:
+        reflex_margin_mode!(Keyword.get(opts, :reflex_margin_mode, "profile_floor")),
+      reflex_high_agent_margin: Keyword.get(opts, :reflex_high_agent_margin),
+      reflex_high_role_margin: Keyword.get(opts, :reflex_high_role_margin),
+      reflex_low_agent_margin: Keyword.get(opts, :reflex_low_agent_margin),
+      reflex_low_role_margin: Keyword.get(opts, :reflex_low_role_margin),
+      reflex_missing_margin: :medium,
+      reflex_force_sequence: [:thinker, :verifier]
+    ]
+  end
+
+  defp reflex_margin_mode!("profile_floor"), do: :profile_floor
+  defp reflex_margin_mode!(:profile_floor), do: :profile_floor
+  defp reflex_margin_mode!("absolute"), do: :absolute
+  defp reflex_margin_mode!(:absolute), do: :absolute
+
+  defp reflex_margin_mode!(value),
+    do: raise(ArgumentError, "invalid reflex margin mode: #{inspect(value)}")
 
   defp emit_trace_event(path, run_ref, event_type, payload) do
     JsonlSink.emit(
@@ -319,6 +433,10 @@ defmodule Trinity.Examples.QwenRouterPromptEval do
 
   defp identity_field(identity, key) when is_map(identity),
     do: Map.get(identity, key, Map.get(identity, Atom.to_string(key)))
+
+  defp safe_runtime_profile(profile, _fallback) when profile in @profiles, do: profile
+  defp safe_runtime_profile(profile, _fallback) when is_binary(profile), do: profile
+  defp safe_runtime_profile(_profile, fallback), do: fallback
 
   defp route_status(id, decision, expected, opts) do
     if Keyword.fetch!(opts, :assert?) do
@@ -499,6 +617,27 @@ defmodule Trinity.Examples.QwenRouterPromptEval do
 
     PASS qwen_router_prompt_eval
     """)
+  end
+
+  defp print_reflex_report(results) do
+    IO.puts("\nReflex classification")
+
+    Enum.each(results, fn result ->
+      reflex = Map.fetch!(result, :reflex)
+      IO.puts("  #{result.id}: #{reflex.confidence_class} -> #{reflex.action}")
+    end)
+
+    class_counts = Enum.frequencies_by(results, & &1.reflex.confidence_class)
+    action_counts = Enum.frequencies_by(results, & &1.reflex.action)
+
+    IO.puts("\nReflex summary")
+    IO.puts("  high: #{Map.get(class_counts, :high, 0)}")
+    IO.puts("  medium: #{Map.get(class_counts, :medium, 0)}")
+    IO.puts("  low: #{Map.get(class_counts, :low, 0)}")
+    IO.puts("  direct_dispatch: #{Map.get(action_counts, :direct_dispatch, 0)}")
+    IO.puts("  normal_dispatch: #{Map.get(action_counts, :normal_dispatch, 0)}")
+
+    IO.puts("  thinker_then_verifier: #{Map.get(action_counts, :thinker_then_verifier, 0)}")
   end
 
   defp write_snapshot!(results, path) do
