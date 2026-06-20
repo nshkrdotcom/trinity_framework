@@ -46,10 +46,14 @@ to retain input messages.
 Before accepting an externally trained vector:
 
 1. Review the fitness manifest, skipped/conflict report, and dataset digest.
-2. Place the candidate vector at the explicit `--source-vector` path.
-3. Export the adapted bundle without overwriting the current accepted bundle.
-4. Run semantic parity and large-tensor checks.
-5. Run the 37-case direct Qwen eval and all CUDA HITL gates.
+2. Run `mix trinity.sakana.fitness_inspect` and
+   `mix trinity.sakana.fitness_replay`.
+3. Run `mix trinity.reflex.calibrate` if reflex thresholds are being reviewed.
+4. Run `mix trinity.sakana.candidate_eval` for candidate routes or vectors.
+5. Place the accepted candidate vector at the explicit `--source-vector` path.
+6. Export the adapted bundle without overwriting the current accepted bundle.
+7. Run semantic parity and large-tensor checks.
+8. Run the 37-case direct Qwen eval and all CUDA HITL gates.
 
 ## Export Adapted Safetensors
 

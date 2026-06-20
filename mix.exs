@@ -335,6 +335,7 @@ defmodule TrinityFramework.MixProject do
         "docs/production_qwen_slm_profile.md",
         "docs/production_runbook.md",
         "docs/provider_smoke_tests.md",
+        "docs/adaptation_readiness_loop.md",
         "docs/router_reflex.md",
         "docs/sakana_adapted_artifact_plan.md",
         "docs/sakana_fitness_export.md",
@@ -359,6 +360,7 @@ defmodule TrinityFramework.MixProject do
         "Artifacts & Pipelines": [
           "guides/artifacts_and_export.md",
           "guides/artifact_distribution.md",
+          "docs/adaptation_readiness_loop.md",
           "docs/sakana_adapted_artifact_plan.md",
           "docs/sakana_fitness_export.md",
           "docs/elixir_svd_decomposition.md"

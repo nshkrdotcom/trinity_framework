@@ -159,6 +159,58 @@ defmodule Trinity.Ops.CommandSpec do
           json: :boolean
         ]
       },
+      trinity_sakana_fitness_inspect: %{
+        task: "trinity.sakana.fitness_inspect",
+        switches: [
+          fitness: :string,
+          manifest: :string,
+          out: :string,
+          skip_invalid: :boolean,
+          json: :boolean
+        ]
+      },
+      trinity_sakana_fitness_replay: %{
+        task: "trinity.sakana.fitness_replay",
+        switches: [
+          fitness: :string,
+          manifest: :string,
+          out: :string,
+          margin_mode: :string,
+          margin_scale: :float,
+          latency_target_ms: :integer,
+          cost_target_usd: :float,
+          positive_threshold: :float,
+          negative_threshold: :float,
+          skip_invalid: :boolean,
+          json: :boolean
+        ]
+      },
+      trinity_reflex_calibrate: %{
+        task: "trinity.reflex.calibrate",
+        switches: [
+          fitness: :string,
+          out: :string,
+          margin_mode: :string,
+          high_multiplier: :keep,
+          low_multiplier: :keep,
+          json: :boolean
+        ]
+      },
+      trinity_sakana_candidate_eval: %{
+        task: "trinity.sakana.candidate_eval",
+        switches: [
+          fitness: :string,
+          manifest: :string,
+          candidate_routes: :string,
+          candidate_vector: :string,
+          candidate_vector_key: :string,
+          candidate_scale_count: :integer,
+          candidate_hidden_size: :integer,
+          candidate_output_count: :integer,
+          out: :string,
+          json: :boolean
+        ]
+      },
       trinity_sakana_import_python: %{
         task: "trinity.sakana.import_python",
         switches: [

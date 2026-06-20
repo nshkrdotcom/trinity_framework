@@ -109,6 +109,29 @@ Candidate generation, selection, optimizer state, and mutation policy belong to
 the external trainer. TRINITY resumes ownership when a candidate router vector
 enters artifact export and acceptance gates.
 
+Before training or candidate review, run the readiness reports:
+
+```bash
+mix trinity.sakana.fitness_inspect \
+  --fitness tmp/sakana_fitness/fitness.jsonl \
+  --manifest tmp/sakana_fitness/manifest.json \
+  --json
+
+mix trinity.sakana.fitness_replay \
+  --fitness tmp/sakana_fitness/fitness.jsonl \
+  --manifest tmp/sakana_fitness/manifest.json \
+  --json
+
+mix trinity.reflex.calibrate \
+  --fitness tmp/sakana_fitness/fitness.jsonl \
+  --json
+```
+
+When external training returns candidate evidence,
+`mix trinity.sakana.candidate_eval` produces a proposal report. Candidate eval
+is read-only: it validates candidate routes or vector metadata and never writes
+accepted artifacts.
+
 ## Score Formula V1
 
 The score starts at `0.50`, applies verifier outcome, margin strength, revision,

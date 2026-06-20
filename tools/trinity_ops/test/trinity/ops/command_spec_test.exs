@@ -21,9 +21,13 @@ defmodule Trinity.Ops.CommandSpecTest do
     trinity.hitl.vector
     trinity.orchestrator.demo
     trinity.parity.check
+    trinity.reflex.calibrate
     trinity.route.demo
+    trinity.sakana.candidate_eval
     trinity.sakana.export_adapted
     trinity.sakana.fitness_export
+    trinity.sakana.fitness_inspect
+    trinity.sakana.fitness_replay
     trinity.sakana.import_python
     trinity.sakana.large_tensor_chunks
     trinity.sakana.parity_sample
@@ -142,6 +146,38 @@ defmodule Trinity.Ops.CommandSpecTest do
       "fitness.jsonl",
       "--margin-mode",
       "profile_floor"
+    ],
+    trinity_sakana_fitness_inspect: [
+      "--fitness",
+      "fitness.jsonl",
+      "--manifest",
+      "manifest.json",
+      "--json"
+    ],
+    trinity_sakana_fitness_replay: [
+      "--fitness",
+      "fitness.jsonl",
+      "--manifest",
+      "manifest.json",
+      "--margin-mode",
+      "profile_floor"
+    ],
+    trinity_reflex_calibrate: [
+      "--fitness",
+      "fitness.jsonl",
+      "--margin-mode",
+      "profile_floor",
+      "--high-multiplier",
+      "4.0",
+      "--low-multiplier",
+      "1.0"
+    ],
+    trinity_sakana_candidate_eval: [
+      "--fitness",
+      "fitness.jsonl",
+      "--candidate-routes",
+      "candidate_routes.jsonl",
+      "--json"
     ],
     trinity_sakana_import_python: [
       "--source-dir",

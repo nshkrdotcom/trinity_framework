@@ -265,6 +265,38 @@ generation, optimization, and weight mutation; the framework resumes ownership
 at router-vector validation, adapted artifact export, parity, eval, and CUDA
 acceptance. See [Sakana Fitness Export](docs/sakana_fitness_export.md).
 
+After export, inspect and replay the dataset before using it for external
+training:
+
+```bash
+mix trinity.sakana.fitness_inspect \
+  --fitness tmp/sakana_fitness/fitness.jsonl \
+  --manifest tmp/sakana_fitness/manifest.json \
+  --json
+
+mix trinity.sakana.fitness_replay \
+  --fitness tmp/sakana_fitness/fitness.jsonl \
+  --manifest tmp/sakana_fitness/manifest.json \
+  --json
+
+mix trinity.reflex.calibrate \
+  --fitness tmp/sakana_fitness/fitness.jsonl \
+  --json
+```
+
+When an external trainer returns candidate routes or a candidate vector, create
+a non-mutating proposal report before artifact export:
+
+```bash
+mix trinity.sakana.candidate_eval \
+  --fitness tmp/sakana_fitness/fitness.jsonl \
+  --manifest tmp/sakana_fitness/manifest.json \
+  --candidate-routes tmp/candidates/candidate_routes.jsonl \
+  --json
+```
+
+See [Adaptation Readiness Loop](docs/adaptation_readiness_loop.md).
+
 Reflex classification can also be reported during the Qwen prompt eval without
 changing strict eval semantics:
 
@@ -378,6 +410,10 @@ mix trinity.parity.check               # Python/Elixir parity comparator wrapper
 mix trinity.route.demo                 # Gated route demo
 mix trinity.sakana.export_adapted      # Export adapted Qwen tensors and router head
 mix trinity.sakana.fitness_export      # Export deterministic route fitness JSONL
+mix trinity.sakana.fitness_inspect     # Inspect dataset health and manifest digest
+mix trinity.sakana.fitness_replay      # Replay score-v1 and reflex economics
+mix trinity.reflex.calibrate           # Calibrate reflex threshold candidates
+mix trinity.sakana.candidate_eval      # Evaluate non-mutating candidate proposals
 mix trinity.sakana.import_python       # Import Python semantic Sakana artifacts
 mix trinity.sakana.large_tensor_chunks # Replay large tensor stages in chunks
 mix trinity.sakana.parity_sample       # Emit SVD/SVF parity diagnostics
@@ -418,6 +454,7 @@ acceptable for sign-off.
 - [Artifact Distribution](guides/artifact_distribution.md)
 - [Artifacts And Export](guides/artifacts_and_export.md)
 - [Sakana Fitness Export](docs/sakana_fitness_export.md)
+- [Adaptation Readiness Loop](docs/adaptation_readiness_loop.md)
 - [Router Reflex](docs/router_reflex.md)
 - [Runtime Profiles](guides/runtime_profiles.md)
 - [Evals](guides/evals.md)

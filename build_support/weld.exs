@@ -63,6 +63,7 @@ defmodule TrinityFramework.Build.WeldContract do
     "docs/production_qwen_slm_profile.md",
     "docs/production_runbook.md",
     "docs/provider_smoke_tests.md",
+    "docs/adaptation_readiness_loop.md",
     "docs/router_reflex.md",
     "docs/sakana_adapted_artifact_plan.md",
     "docs/sakana_svd_byte_match_rigor_plan.md",

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Add adaptation readiness reports: fitness dataset inspection, score-v1
+  replay, reflex-threshold calibration, and non-mutating candidate route/vector
+  proposal evaluation.
 - Add confidence-driven router reflex: high-confidence routes dispatch
   directly, medium-confidence routes keep normal Orchestrator behavior, and
   low-confidence routes force Thinker before Verifier with traceable

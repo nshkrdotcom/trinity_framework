@@ -144,6 +144,17 @@ fitness indirectly through verifier outcomes, revisions, latency, cost, and
 budget pressure. A later formula can explicitly reward correct escalation or
 penalize unnecessary escalation.
 
+Threshold calibration is a readiness report over exported fitness examples:
+
+```bash
+mix trinity.reflex.calibrate \
+  --fitness tmp/sakana_fitness/fitness.jsonl \
+  --json
+```
+
+The command sweeps deterministic threshold multipliers and reports recommended
+candidates. It does not change runtime defaults.
+
 ## Qwen Eval Report
 
 The Qwen router prompt eval has an analysis-only reflex report:

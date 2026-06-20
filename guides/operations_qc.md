@@ -44,8 +44,28 @@ mix trinity.sakana.fitness_export \
   --manifest-out tmp/sakana_fitness_smoke/manifest.json \
   --json
 
+mix trinity.sakana.fitness_inspect \
+  --fitness tmp/sakana_fitness_smoke/fitness.jsonl \
+  --manifest tmp/sakana_fitness_smoke/manifest.json \
+  --out tmp/sakana_fitness_smoke/inspect.json \
+  --json
+
+mix trinity.sakana.fitness_replay \
+  --fitness tmp/sakana_fitness_smoke/fitness.jsonl \
+  --manifest tmp/sakana_fitness_smoke/manifest.json \
+  --out tmp/sakana_fitness_smoke/replay.json \
+  --json
+
+mix trinity.reflex.calibrate \
+  --fitness tmp/sakana_fitness_smoke/fitness.jsonl \
+  --out tmp/sakana_fitness_smoke/reflex_calibration.json \
+  --json
+
 test -s tmp/sakana_fitness_smoke/fitness.jsonl
 test -s tmp/sakana_fitness_smoke/manifest.json
+test -s tmp/sakana_fitness_smoke/inspect.json
+test -s tmp/sakana_fitness_smoke/replay.json
+test -s tmp/sakana_fitness_smoke/reflex_calibration.json
 ```
 
 The mock smoke must not require a network, CUDA, an artifact fetch, or provider

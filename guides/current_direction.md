@@ -45,3 +45,6 @@ directions.
   exported fitness examples contain only allowlisted trace fields.
 - External training can return a reviewed router vector to the existing
   adapted-export, parity, eval, and CUDA acceptance path.
+- The adaptation readiness loop now adds dataset inspection, score replay,
+  reflex calibration, and non-mutating candidate proposal reports before any
+  candidate vector enters artifact export gates.

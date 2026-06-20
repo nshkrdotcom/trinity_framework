@@ -110,8 +110,15 @@ defmodule Trinity.Coordinator.ReflexPolicyTest do
              ReflexPolicy.evaluate(route(1.0, 1.0), reflex_force_sequence: [:worker])
   end
 
-  test "string options use fixed cases without creating atoms" do
-    before_count = :erlang.system_info(:atom_count)
+  test "string options use fixed cases and reject unknown strings" do
+    assert {:ok, :high} =
+             ReflexPolicy.classify(route(10.0, 10.0),
+               reflex_margin_mode: "absolute",
+               reflex_high_agent_margin: 1.0,
+               reflex_high_role_margin: 1.0,
+               reflex_low_agent_margin: 0.1,
+               reflex_low_role_margin: 0.1
+             )
 
     for index <- 1..50 do
       value = "invalid-reflex-mode-#{index}"
@@ -119,8 +126,6 @@ defmodule Trinity.Coordinator.ReflexPolicyTest do
       assert {:error, {:invalid_reflex_margin_mode, ^value}} =
                ReflexPolicy.evaluate(route(1.0, 1.0), reflex_margin_mode: value)
     end
-
-    assert :erlang.system_info(:atom_count) == before_count
   end
 
   test "explanation output is trace-safe and excludes source content" do

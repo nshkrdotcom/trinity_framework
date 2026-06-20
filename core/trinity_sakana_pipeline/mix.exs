@@ -46,6 +46,7 @@ defmodule Trinity.SakanaPipeline.MixProject do
       dep(:crucible_safetensors),
       dep(:crucible_factorization),
       dep(:crucible_tensor_patch),
+      dep(:crucible_signal_trace),
       dep(:crucible_model_registry)
     ] ++ quality_deps()
   end

@@ -17,7 +17,11 @@ Generate or select a router vector through the external evolution loop first:
 1. Produce traces with `mix trinity.orchestrator.demo` or Qwen eval
    `--trace-out`.
 2. Run `mix trinity.sakana.fitness_export`.
-3. Train externally and place the reviewed vector at
+3. Run `mix trinity.sakana.fitness_inspect`,
+   `mix trinity.sakana.fitness_replay`, and `mix trinity.reflex.calibrate`.
+4. Train externally and evaluate returned candidates with
+   `mix trinity.sakana.candidate_eval`.
+5. Place the reviewed vector at
    `priv/sakana_trinity/artifacts/trinity_router_es_vector.safetensors`.
 
 ```bash

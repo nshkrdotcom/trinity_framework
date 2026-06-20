@@ -20,9 +20,13 @@ defmodule TrinityFrameworkRootTest do
     trinity.hitl.vector
     trinity.orchestrator.demo
     trinity.parity.check
+    trinity.reflex.calibrate
     trinity.route.demo
+    trinity.sakana.candidate_eval
     trinity.sakana.export_adapted
     trinity.sakana.fitness_export
+    trinity.sakana.fitness_inspect
+    trinity.sakana.fitness_replay
     trinity.sakana.import_python
     trinity.sakana.large_tensor_chunks
     trinity.sakana.parity_sample
@@ -54,6 +58,8 @@ defmodule TrinityFrameworkRootTest do
     docs/production_qwen_slm_profile.md
     docs/production_runbook.md
     docs/provider_smoke_tests.md
+    docs/adaptation_readiness_loop.md
+    docs/router_reflex.md
     docs/sakana_adapted_artifact_plan.md
     docs/sakana_fitness_export.md
     docs/sakana_svd_byte_match_rigor_plan.md
