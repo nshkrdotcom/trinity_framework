@@ -176,8 +176,109 @@ defmodule Trinity.Ops.NativeTasksTest do
     assert File.regular?(get_in(report, ["artifact_paths", "route_decision_path"]))
   end
 
+  test "crucible capture runs a real tiny model activation capture and writes a trace" do
+    out = tmp_path("crucible_capture.json")
+    trace = tmp_path("crucible_capture_trace.json")
+
+    assert :ok =
+             Tasks.run(:trinity_crucible_capture, [
+               "--fixture",
+               "tiny_gpt2",
+               "--input-ids",
+               "1,2,3",
+               "--out",
+               out,
+               "--trace-out",
+               trace
+             ])
+
+    report = Jason.decode!(File.read!(out))
+    trace_report = Jason.decode!(File.read!(trace))
+
+    assert report["schema"] == "trinity.crucible.capture.v1"
+    assert report["signal_count"] > 5
+    assert "blocks.0.attn.hook_q" in report["activation_names"]
+    assert "residual_streams" in report["capture_groups"]
+    assert trace_report["schema"] == "trinity.crucible.forward_trace.summary.v1"
+    assert Enum.any?(trace_report["signals"], &(&1["activation_name"] == "unembed.hook_logits"))
+  end
+
+  test "crucible generation trace writes cache-aware decode telemetry" do
+    out = tmp_path("crucible_generation_trace.json")
+    trace = tmp_path("crucible_generation_trace_payload.json")
+
+    assert :ok =
+             Tasks.run(:trinity_crucible_generation_trace, [
+               "--fixture",
+               "tiny_gpt2",
+               "--max-new-tokens",
+               "2",
+               "--out",
+               out,
+               "--trace-out",
+               trace
+             ])
+
+    report = Jason.decode!(File.read!(out))
+    trace_report = Jason.decode!(File.read!(trace))
+
+    assert report["schema"] == "trinity.crucible.generation_trace.v1"
+    assert length(report["generated_token_ids"]) == 2
+    assert report["cache_offsets"] == [3, 4]
+    assert get_in(report, ["activation_cache", "keys"]) == ["unembed.hook_logits"]
+    assert Enum.all?(trace_report["steps"], &Map.has_key?(&1, "cache_metadata"))
+  end
+
+  test "crucible logit lens projects tiny-model residuals through unembedding" do
+    out = tmp_path("crucible_logit_lens.json")
+
+    assert :ok =
+             Tasks.run(:trinity_crucible_logit_lens, [
+               "--fixture",
+               "tiny_gpt2",
+               "--top-k",
+               "3",
+               "--out",
+               out
+             ])
+
+    report = Jason.decode!(File.read!(out))
+
+    assert report["schema"] == "trinity.crucible.logit_lens.v1"
+    assert report["labels"] == ["0_pre", "1_pre", "final_post"]
+    assert report["logits_shape"] == [3, 1, 3, 32]
+    assert Enum.all?(report["top_k_by_label"], &(length(get_in(&1, ["summary", "top_k"])) == 3))
+  end
+
+  test "crucible patch applies a real activation-cache patch" do
+    out = tmp_path("crucible_patch.json")
+
+    assert :ok =
+             Tasks.run(:trinity_crucible_patch, [
+               "--fixture",
+               "tiny_gpt2",
+               "--clean-input-ids",
+               "1,2,3",
+               "--corrupted-input-ids",
+               "1,2,4",
+               "--patch-activation",
+               "blocks.0.hook_resid_pre",
+               "--patch-pos",
+               "1",
+               "--out",
+               out
+             ])
+
+    report = Jason.decode!(File.read!(out))
+
+    assert report["schema"] == "trinity.crucible.patch.v1"
+    assert report["activation_name"] == "blocks.0.hook_resid_pre"
+    assert report["patched_position_matches_clean?"] == true
+    assert report["patched_delta_max_abs"] >= 0.0
+  end
+
   test "live Crucible runtime calls use negotiated tap plans" do
-    source = File.read!("tools/trinity_ops/lib/trinity/ops/native_tasks.ex")
+    source = File.read!(Path.expand("../../../lib/trinity/ops/native_tasks.ex", __DIR__))
 
     refute String.contains?(source, "CrucibleRuntime.forward(pid, nil")
     refute String.contains?(source, "CrucibleRuntime.forward(pid,\n          nil")

@@ -7,9 +7,14 @@ defmodule Trinity.Ops.CommandSpecTest do
   @expected_tasks ~w(
     trinity.artifact.fetch
     trinity.crucible.capabilities
+    trinity.crucible.capture
+    trinity.crucible.generation_trace
     trinity.crucible.inspect
+    trinity.crucible.logit_lens
     trinity.crucible.matrix_eval
+    trinity.crucible.patch
     trinity.crucible.replay
+    trinity.crucible.trace_replay
     trinity.crucible.transcript
     trinity.demo
     trinity.env.check
@@ -44,7 +49,33 @@ defmodule Trinity.Ops.CommandSpecTest do
       "--out",
       "tmp/capabilities.json"
     ],
+    trinity_crucible_capture: [
+      "--fixture",
+      "tiny_gpt2",
+      "--input-ids",
+      "1,2,3",
+      "--out",
+      "tmp/capture.json",
+      "--trace-out",
+      "tmp/capture_trace.json"
+    ],
+    trinity_crucible_generation_trace: [
+      "--fixture",
+      "tiny_gpt2",
+      "--max-new-tokens",
+      "2",
+      "--out",
+      "tmp/generation_trace.json"
+    ],
     trinity_crucible_inspect: ["--runtime-profile", "mock_tiny", "--message", "hello"],
+    trinity_crucible_logit_lens: [
+      "--fixture",
+      "tiny_gpt2",
+      "--top-k",
+      "3",
+      "--out",
+      "tmp/logit_lens.json"
+    ],
     trinity_crucible_matrix_eval: [
       "--runtime-profile",
       "mock_tiny",
@@ -52,6 +83,20 @@ defmodule Trinity.Ops.CommandSpecTest do
       "2",
       "--artifact-root",
       "tmp/crucible_v5"
+    ],
+    trinity_crucible_patch: [
+      "--fixture",
+      "tiny_gpt2",
+      "--clean-input-ids",
+      "1,2,3",
+      "--corrupted-input-ids",
+      "1,2,4",
+      "--patch-activation",
+      "blocks.0.hook_resid_pre",
+      "--patch-pos",
+      "1",
+      "--out",
+      "tmp/patch.json"
     ],
     trinity_crucible_transcript: [
       "--name",
@@ -72,6 +117,12 @@ defmodule Trinity.Ops.CommandSpecTest do
       "tools/trinity_ops/test/fixtures/crucible_minimal_forward_trace.jsonl",
       "--out",
       "tmp/replay.json"
+    ],
+    trinity_crucible_trace_replay: [
+      "--trace",
+      "tools/trinity_ops/test/fixtures/crucible_minimal_forward_trace.jsonl",
+      "--out",
+      "tmp/trace_replay.json"
     ],
     trinity_demo: [],
     trinity_env_check: ["-a", "artifact", "-r", "cuda"],

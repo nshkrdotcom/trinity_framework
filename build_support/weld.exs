@@ -12,6 +12,7 @@ defmodule TrinityFramework.Build.WeldContract do
     :crucible_factorization,
     :crucible_tensor_patch,
     :crucible_model_registry,
+    :crucible_mechinterp,
     :crucible_signal,
     :crucible_tap,
     :crucible_signal_trace,
@@ -28,6 +29,7 @@ defmodule TrinityFramework.Build.WeldContract do
 
   @manifest_dependency_opts %{
     crucible_bumblebee: [override: true],
+    crucible_mechinterp: [override: true],
     crucible_policy: [override: true],
     crucible_signal: [override: true],
     crucible_signal_trace: [override: true],

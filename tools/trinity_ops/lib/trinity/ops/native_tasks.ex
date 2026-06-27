@@ -25,8 +25,16 @@ defmodule Trinity.Ops.NativeTasks do
   alias SelfHostedInferenceCore.CrucibleRuntime
   alias Trinity.Bridge.Trace.JsonlSink
   alias Trinity.Coordinator.TraceEvent
-  alias Trinity.Crucible.{ArtifactPaths, OperatorReport, RequestContext, TapPlanBuilder, TraceAdapter}
-  alias Trinity.Ops.CommandSpec
+
+  alias Trinity.Crucible.{
+    ArtifactPaths,
+    OperatorReport,
+    RequestContext,
+    TapPlanBuilder,
+    TraceAdapter
+  }
+
+  alias Trinity.Ops.{CommandSpec, CrucibleMechInterpTasks}
   alias Trinity.Ops.EvalMetadata
   alias Trinity.RefSanitizer
   alias Trinity.SingleNode.Config
@@ -52,9 +60,17 @@ defmodule Trinity.Ops.NativeTasks do
   @spec run(CommandSpec.task_key(), keyword()) :: :ok
   def run(:trinity_artifact_fetch, opts), do: artifact_fetch(opts)
   def run(:trinity_crucible_capabilities, opts), do: crucible_capabilities(opts)
+  def run(:trinity_crucible_capture, opts), do: CrucibleMechInterpTasks.capture(opts)
+
+  def run(:trinity_crucible_generation_trace, opts),
+    do: CrucibleMechInterpTasks.generation_trace(opts)
+
   def run(:trinity_crucible_inspect, opts), do: crucible_inspect(opts)
+  def run(:trinity_crucible_logit_lens, opts), do: CrucibleMechInterpTasks.logit_lens(opts)
   def run(:trinity_crucible_matrix_eval, opts), do: crucible_matrix_eval(opts)
+  def run(:trinity_crucible_patch, opts), do: CrucibleMechInterpTasks.patch(opts)
   def run(:trinity_crucible_replay, opts), do: crucible_replay(opts)
+  def run(:trinity_crucible_trace_replay, opts), do: crucible_replay(opts)
   def run(:trinity_crucible_transcript, opts), do: crucible_transcript(opts)
   def run(:trinity_demo, opts), do: route_demo(opts)
   def run(:trinity_eval, opts), do: eval(opts)
@@ -116,8 +132,17 @@ defmodule Trinity.Ops.NativeTasks do
 
     trace_path = require_regular_path!(opts, :trace)
     trace = load_v4_trace!(trace_path)
-    paths = ArtifactPaths.new(root: v5_artifact_root(opts), trace_name: trace.trace_id) |> ArtifactPaths.ensure!()
-    out = Keyword.get(opts, :out) || ArtifactPaths.report_path(paths, "capabilities_#{safe_artifact_name(trace.trace_id)}.json")
+
+    paths =
+      ArtifactPaths.new(root: v5_artifact_root(opts), trace_name: trace.trace_id)
+      |> ArtifactPaths.ensure!()
+
+    out =
+      Keyword.get(opts, :out) ||
+        ArtifactPaths.report_path(
+          paths,
+          "capabilities_#{safe_artifact_name(trace.trace_id)}.json"
+        )
 
     payload = %{
       trace_path: trace_path,
@@ -153,7 +178,10 @@ defmodule Trinity.Ops.NativeTasks do
     trace_path = require_regular_path!(opts, :trace)
     trace = load_v4_trace!(trace_path)
     decision = CruciblePolicyPlan.evaluate(trace)
-    paths = ArtifactPaths.new(root: v5_artifact_root(opts), trace_name: trace.trace_id) |> ArtifactPaths.ensure!()
+
+    paths =
+      ArtifactPaths.new(root: v5_artifact_root(opts), trace_name: trace.trace_id)
+      |> ArtifactPaths.ensure!()
 
     artifact_paths =
       persist_crucible_decision_artifacts(
@@ -163,7 +191,9 @@ defmodule Trinity.Ops.NativeTasks do
         Keyword.put(opts, :artifact_suffix, Path.basename(trace_path))
       )
 
-    out = Keyword.get(opts, :out) || ArtifactPaths.report_path(paths, "replay_#{safe_artifact_name(trace.trace_id)}.json")
+    out =
+      Keyword.get(opts, :out) ||
+        ArtifactPaths.report_path(paths, "replay_#{safe_artifact_name(trace.trace_id)}.json")
 
     payload =
       :replay

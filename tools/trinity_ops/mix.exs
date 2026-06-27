@@ -50,6 +50,7 @@ defmodule Trinity.Ops.MixProject do
       {:trinity_bridge_trace, path: "../../bridges/trinity_bridge_trace"},
       dep(:crucible_factorization),
       dep(:crucible_model_registry),
+      dep(:crucible_mechinterp),
       dep(:crucible_policy),
       dep(:crucible_bumblebee),
       dep(:crucible_signal_trace),

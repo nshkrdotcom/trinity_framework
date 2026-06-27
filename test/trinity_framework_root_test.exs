@@ -6,9 +6,14 @@ defmodule TrinityFrameworkRootTest do
   @expected_tasks ~w(
     trinity.artifact.fetch
     trinity.crucible.capabilities
+    trinity.crucible.capture
+    trinity.crucible.generation_trace
     trinity.crucible.inspect
+    trinity.crucible.logit_lens
     trinity.crucible.matrix_eval
+    trinity.crucible.patch
     trinity.crucible.replay
+    trinity.crucible.trace_replay
     trinity.crucible.transcript
     trinity.demo
     trinity.env.check
@@ -42,6 +47,7 @@ defmodule TrinityFrameworkRootTest do
     guides/crucible_path.md
     guides/crucible_artifact_layout.md
     guides/crucible_capability_degradation.md
+    guides/crucible_mechinterp.md
     guides/crucible_provider_boundary.md
     guides/crucible_replay.md
     guides/crucible_testing.md

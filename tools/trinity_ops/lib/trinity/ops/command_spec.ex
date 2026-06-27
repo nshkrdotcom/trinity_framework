@@ -30,16 +30,36 @@ defmodule Trinity.Ops.CommandSpec do
         task: "trinity.crucible.capabilities",
         switches: crucible_trace_switches()
       },
+      trinity_crucible_capture: %{
+        task: "trinity.crucible.capture",
+        switches: crucible_mech_interp_switches()
+      },
+      trinity_crucible_generation_trace: %{
+        task: "trinity.crucible.generation_trace",
+        switches: crucible_mech_interp_switches()
+      },
       trinity_crucible_inspect: %{
         task: "trinity.crucible.inspect",
         switches: crucible_switches()
+      },
+      trinity_crucible_logit_lens: %{
+        task: "trinity.crucible.logit_lens",
+        switches: crucible_mech_interp_switches()
       },
       trinity_crucible_matrix_eval: %{
         task: "trinity.crucible.matrix_eval",
         switches: crucible_matrix_switches()
       },
+      trinity_crucible_patch: %{
+        task: "trinity.crucible.patch",
+        switches: crucible_mech_interp_switches()
+      },
       trinity_crucible_replay: %{
         task: "trinity.crucible.replay",
+        switches: crucible_trace_switches()
+      },
+      trinity_crucible_trace_replay: %{
+        task: "trinity.crucible.trace_replay",
         switches: crucible_trace_switches()
       },
       trinity_crucible_transcript: %{
@@ -355,6 +375,23 @@ defmodule Trinity.Ops.CommandSpec do
       run_tag: :string,
       stability_repeats: :integer,
       stability_prompt: :string
+    ]
+  end
+
+  defp crucible_mech_interp_switches do
+    [
+      artifact_root: :string,
+      clean_input_ids: :string,
+      corrupted_input_ids: :string,
+      fixture: :string,
+      input_ids: :string,
+      max_new_tokens: :integer,
+      out: :string,
+      patch_activation: :string,
+      patch_pos: :integer,
+      top_k: :integer,
+      trace_name: :string,
+      trace_out: :string
     ]
   end
 

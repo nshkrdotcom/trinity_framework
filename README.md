@@ -509,17 +509,24 @@ Status: `trinity-v5-live-replay-matrix-python-trace-passing`.
 
 The Crucible operator tasks support V5 artifact-backed trace replay, native
 hosted runtime live inspect, live matrix eval, role-boundary stability reports,
-policy/route decision artifact emission, and external Python/PyTorch trace
-production for model internals that Bumblebee does not expose:
+policy/route decision artifact emission, local tiny-model mech-interp capture,
+generation traces, logit-lens reports, activation patching, and external
+Python/PyTorch trace production for model internals that Bumblebee does not
+expose:
 
 ```bash
 mix trinity.crucible.inspect --trace tmp/crucible_v5/traces/native/model_forward_live.trace.jsonl --artifact-root tmp/crucible_v5
 mix trinity.crucible.matrix_eval --trace tmp/crucible_v5/traces/native --artifact-root tmp/crucible_v5
+mix trinity.crucible.capture --fixture tiny_gpt2 --artifact-root tmp/crucible_mechinterp
+mix trinity.crucible.generation_trace --fixture tiny_gpt2 --max-new-tokens 2 --artifact-root tmp/crucible_mechinterp
+mix trinity.crucible.logit_lens --fixture tiny_gpt2 --artifact-root tmp/crucible_mechinterp
+mix trinity.crucible.patch --fixture tiny_gpt2 --artifact-root tmp/crucible_mechinterp
 TRINITY_CRUCIBLE_LIVE=true mix trinity.crucible.inspect --live --model-id gpt2 --backend binary --artifact-root tmp/crucible_v5 --prompt "Hi"
 TRINITY_CRUCIBLE_LIVE=true mix trinity.crucible.matrix_eval --live --limit 37 --backend binary --artifact-root tmp/crucible_v5
 python3 tools/python/crucible_torch_trace.py --model-id gpt2 --artifact-root tmp/crucible_v5 --trace-name python_torch_gpt2_phase15
 mix trinity.crucible.inspect --trace tmp/crucible_v5/traces/python/python_torch_gpt2_phase15.trace.jsonl --artifact-root tmp/crucible_v5
 ```
 
-See [Trinity Live Inspect](guides/trinity_live_inspect.md) and
+See [Trinity Crucible Mech-Interp Tasks](guides/crucible_mechinterp.md),
+[Trinity Live Inspect](guides/trinity_live_inspect.md), and
 [Python Torch Trace Provider](guides/python_torch_trace_provider.md).

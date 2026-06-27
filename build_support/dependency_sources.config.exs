@@ -28,6 +28,13 @@
       default_order: [:path, :github, :hex],
       publish_order: [:hex]
     },
+    crucible_mechinterp: %{
+      path: "../../North-Shore-AI/crucible_mechinterp",
+      github: %{repo: "North-Shore-AI/crucible_mechinterp", branch: "main"},
+      hex: "~> 0.1.0",
+      default_order: [:path, :github, :hex],
+      publish_order: [:hex]
+    },
     crucible_signal: %{
       path: "../../North-Shore-AI/crucible_signal",
       github: %{repo: "North-Shore-AI/crucible_signal", branch: "main"},

@@ -14,6 +14,7 @@ defmodule DependencySources do
   @app_string_keys %{
     "aitrace" => :aitrace,
     "crucible_factorization" => :crucible_factorization,
+    "crucible_mechinterp" => :crucible_mechinterp,
     "crucible_model_registry" => :crucible_model_registry,
     "crucible_safetensors" => :crucible_safetensors,
     "crucible_tensor_patch" => :crucible_tensor_patch,
