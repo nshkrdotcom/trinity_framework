@@ -3,7 +3,15 @@ defmodule TrinityFramework.Integration.TraceAdapterTest do
 
   alias CruciblePolicy.RouteDecision, as: CrucibleRouteDecision
   alias Trinity.Coordinator.{RouteDecision, RouteLogits}
-  alias Trinity.Crucible.{DecisionAdapter, RequestContext, TapPlanBuilder, TraceAdapter}
+
+  alias Trinity.Crucible.{
+    ArtifactPaths,
+    DecisionAdapter,
+    OperatorReport,
+    RequestContext,
+    TapPlanBuilder,
+    TraceAdapter
+  }
 
   test "TraceAdapter builds bounded Crucible traces from route logits" do
     logits = logits_fixture()
@@ -117,6 +125,99 @@ defmodule TrinityFramework.Integration.TraceAdapterTest do
     assert trace.final_logits.backend == :route_logits
     assert trace.metadata.backend_label == backend_label
     assert trace.final_logits.metadata.backend_label == backend_label
+  end
+
+  test "RequestContext carries operator fields and redacts metadata" do
+    context =
+      RequestContext.new(%{
+        "request_id" => "req-1",
+        "run_id" => "run-1",
+        "attempt_id" => "attempt-1",
+        "session_id" => "session-1",
+        "role" => "verifier",
+        "candidate_routes" => ["worker", "verifier"],
+        "prompt_digest" => "sha256:prompt",
+        "artifact_root" => "/tmp/trinity",
+        "trace_out" => "/tmp/trinity/trace.jsonl",
+        "policy_id" => "policy:fixture",
+        "metadata" => %{
+          "safe" => "kept",
+          "api_key" => "secret",
+          "nested" => %{"authorization" => "bearer secret"}
+        }
+      })
+
+    assert context.request_id == "req-1"
+    assert context.run_id == "run-1"
+    assert context.role == "verifier"
+    assert context.candidate_routes == ["worker", "verifier"]
+    assert context.policy_id == "policy:fixture"
+
+    assert RequestContext.redacted_metadata(context) == %{
+             "safe" => "kept",
+             "api_key" => "[REDACTED]",
+             "nested" => %{"authorization" => "[REDACTED]"}
+           }
+  end
+
+  test "TapPlanBuilder exposes named Trinity operator plans" do
+    context = RequestContext.from_messages([%{"role" => "user", "content" => "Verify this."}])
+
+    assert TapPlanBuilder.route_decision_plan(context, %{name: :mock_tiny}).metadata.operator_surface ==
+             :route_decision
+
+    assert TapPlanBuilder.live_inspect_plan(context, %{name: :mock_tiny}).metadata.operator_surface ==
+             :live_inspect
+
+    assert TapPlanBuilder.matrix_eval_plan(context, %{name: :mock_tiny}).metadata.operator_surface ==
+             :matrix_eval
+
+    assert TapPlanBuilder.minimal_plan(context, %{name: :mock_tiny}).metadata.operator_surface ==
+             :minimal
+
+    generation_types =
+      TapPlanBuilder.generation_step_plan(context, %{name: :mock_tiny}).specs
+      |> Enum.map(& &1.signal_spec.signal_type)
+
+    assert :generation_step_logits in generation_types
+  end
+
+  test "TraceAdapter exposes operator summaries and evidence extraction helpers" do
+    logits = logits_fixture()
+    context = RequestContext.from_messages([%{"role" => "user", "content" => "Verify this."}])
+    tap_plan = TapPlanBuilder.route_decision_plan(context, %{name: :mock_tiny})
+    trace = TraceAdapter.from_logits(logits, context, tap_plan, trace_id: "trace:summary")
+
+    assert %{trace_id: "trace:summary", signal_count: 1} = TraceAdapter.summarize_trace(trace)
+    assert %{by_type: %{final_logits: 1}} = TraceAdapter.summarize_signals(trace)
+    assert %{signal_count: 1} = TraceAdapter.summarize_capabilities(trace)
+    assert [%{signal_type: :final_logits}] = TraceAdapter.extract_route_evidence(trace)
+    assert [_ | _] = TraceAdapter.extract_trajectory_evidence(trace)
+    assert TraceAdapter.extract_generation_evidence(trace) == []
+    assert TraceAdapter.render_operator_table(trace) =~ "trace:summary"
+  end
+
+  test "ArtifactPaths and OperatorReport produce durable report envelopes" do
+    root = Path.join(System.tmp_dir!(), "trinity-artifacts-#{System.unique_integer([:positive])}")
+    paths = ArtifactPaths.new(root: root, trace_name: "trace-fixture")
+
+    assert paths.root == root
+
+    assert ArtifactPaths.report_path(paths, "capabilities.json") ==
+             Path.join([root, "reports", "capabilities.json"])
+
+    report =
+      OperatorReport.new!(
+        schema: "trinity.crucible.test.v1",
+        mode: :fixture,
+        trace_id: "trace-fixture",
+        payload: %{ok: true},
+        artifact_paths: %{report_path: ArtifactPaths.report_path(paths, "test.json")}
+      )
+
+    assert report.schema == "trinity.crucible.test.v1"
+    assert report.payload.ok
+    assert OperatorReport.to_map(report).artifact_paths.report_path =~ "test.json"
   end
 
   test "DecisionAdapter maps Crucible policy decisions to deterministic Trinity route decisions" do

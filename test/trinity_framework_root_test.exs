@@ -5,8 +5,10 @@ defmodule TrinityFrameworkRootTest do
 
   @expected_tasks ~w(
     trinity.artifact.fetch
+    trinity.crucible.capabilities
     trinity.crucible.inspect
     trinity.crucible.matrix_eval
+    trinity.crucible.replay
     trinity.crucible.transcript
     trinity.demo
     trinity.env.check
@@ -38,6 +40,11 @@ defmodule TrinityFrameworkRootTest do
     guides/current_direction.md
     guides/system_architecture.md
     guides/crucible_path.md
+    guides/crucible_artifact_layout.md
+    guides/crucible_capability_degradation.md
+    guides/crucible_provider_boundary.md
+    guides/crucible_replay.md
+    guides/crucible_testing.md
     guides/service_buildout.md
     guides/operations_qc.md
     guides/artifact_distribution.md
@@ -140,6 +147,8 @@ defmodule TrinityFrameworkRootTest do
       Trinity.Coordinator.StateManager,
       Trinity.Coordinator.Verifier,
       Trinity.Coordinator.RouteDecisionDerivation,
+      Trinity.Crucible.ArtifactPaths,
+      Trinity.Crucible.OperatorReport,
       Trinity.Crucible.RequestContext,
       Trinity.Crucible.TapPlanBuilder,
       Trinity.Crucible.TraceAdapter,
@@ -203,10 +212,14 @@ defmodule TrinityFrameworkRootTest do
     samples = [
       {:trinity_artifact_fetch,
        ["--pin", "priv/sakana_trinity/artifact_pin.json", "--dest", "tmp/bundle", "--offline"]},
+      {:trinity_crucible_capabilities,
+       ["--trace", "tools/trinity_ops/test/fixtures/crucible_minimal_forward_trace.jsonl"]},
       {:trinity_crucible_inspect,
        ["--runtime-profile", "mock_tiny", "--message", "inspect", "--trace-out", "tmp/c.jsonl"]},
       {:trinity_crucible_matrix_eval,
        ["--runtime-profile", "mock_tiny", "--max-cases", "2", "--out", "tmp/matrix.json"]},
+      {:trinity_crucible_replay,
+       ["--trace", "tools/trinity_ops/test/fixtures/crucible_minimal_forward_trace.jsonl"]},
       {:trinity_demo, route_demo_args()},
       {:trinity_env_check,
        ["--artifact-dir", "priv/sakana_trinity/adapted", "--require", "cuda"]},

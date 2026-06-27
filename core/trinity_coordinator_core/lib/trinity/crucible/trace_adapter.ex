@@ -126,6 +126,93 @@ defmodule Trinity.Crucible.TraceAdapter do
       ]
   end
 
+  @spec summarize_trace(ForwardTrace.t()) :: map()
+  def summarize_trace(%ForwardTrace{} = trace) do
+    %{
+      trace_id: trace.trace_id,
+      run_id: trace.run_id,
+      provider_kind: trace.provider_kind,
+      model_id: trace.model_id,
+      model_family: trace.model_family,
+      backend: trace.backend,
+      tap_plan_ref: trace.tap_plan_ref,
+      signal_count: length(trace.signals),
+      final_logits_ref: trace.final_logits && trace.final_logits.signal_id,
+      has_capability_report?: not is_nil(trace.capability_report),
+      has_layer_trajectory?: not is_nil(trace.layer_trajectory)
+    }
+  end
+
+  @spec summarize_signals(ForwardTrace.t()) :: map()
+  def summarize_signals(%ForwardTrace{} = trace) do
+    %{
+      count: length(trace.signals),
+      by_type: Enum.frequencies_by(trace.signals, & &1.signal_type),
+      by_status: Enum.frequencies_by(trace.signals, & &1.capability_status)
+    }
+  end
+
+  @spec summarize_capabilities(ForwardTrace.t()) :: map()
+  def summarize_capabilities(%ForwardTrace{} = trace) do
+    report = trace.capability_report
+
+    %{
+      signal_count: length(trace.signals),
+      capability_report?: not is_nil(report),
+      supported: capability_list(report, :supported),
+      unsupported: capability_list(report, :unsupported),
+      required_missing: capability_list(report, :required_missing),
+      inferred_signal_types: trace.signals |> Enum.map(& &1.signal_type) |> Enum.uniq()
+    }
+  end
+
+  @spec extract_route_evidence(ForwardTrace.t()) :: [map()]
+  def extract_route_evidence(%ForwardTrace{} = trace) do
+    trace.signals
+    |> Enum.filter(&(&1.signal_type in [:final_logits, :intermediate_logits, :decode_margin]))
+    |> Enum.map(&evidence_record/1)
+  end
+
+  @spec extract_generation_evidence(ForwardTrace.t()) :: [map()]
+  def extract_generation_evidence(%ForwardTrace{} = trace) do
+    trace.signals
+    |> Enum.filter(&(&1.signal_type in [:generation_token, :generation_step_logits]))
+    |> Enum.map(&evidence_record/1)
+  end
+
+  @spec extract_trajectory_evidence(ForwardTrace.t()) :: [map()]
+  def extract_trajectory_evidence(%ForwardTrace{layer_trajectory: %LayerTrajectory{} = trajectory}) do
+    Enum.map(trajectory.points, fn point ->
+      %{
+        layer_index: Map.get(point, :layer_index),
+        signal_ref: Map.get(point, :signal_ref),
+        metadata: Map.get(point, :metadata, %{})
+      }
+    end)
+  end
+
+  def extract_trajectory_evidence(%ForwardTrace{}), do: []
+
+  @spec render_operator_table(ForwardTrace.t() | map()) :: String.t()
+  def render_operator_table(%ForwardTrace{} = trace), do: trace |> summarize_trace() |> render_operator_table()
+
+  def render_operator_table(summary) when is_map(summary) do
+    rows = [
+      {"trace", Map.get(summary, :trace_id)},
+      {"model", Map.get(summary, :model_id)},
+      {"provider", Map.get(summary, :provider_kind)},
+      {"signals", Map.get(summary, :signal_count)}
+    ]
+
+    rows
+    |> Enum.map(fn {label, value} -> "#{label}: #{value}" end)
+    |> Enum.join("\n")
+  end
+
+  @spec write_artifact_index(Trinity.Crucible.ArtifactPaths.t(), [map()]) :: String.t()
+  def write_artifact_index(%Trinity.Crucible.ArtifactPaths{} = paths, entries),
+    do: Trinity.Crucible.ArtifactPaths.write_artifact_index!(paths, entries)
+
   defp request_context(%RequestContext{} = context, _opts), do: context
 
   defp request_context(messages, opts) when is_list(messages) do
@@ -218,6 +305,22 @@ defmodule Trinity.Crucible.TraceAdapter do
 
   defp trajectory_map(nil), do: nil
   defp trajectory_map(%LayerTrajectory{} = trajectory), do: trajectory.points
+
+  defp capability_list(nil, _field), do: []
+
+  defp capability_list(report, field) when is_map(report) do
+    Map.get(report, field, Map.get(report, Atom.to_string(field), [])) || []
+  end
+
+  defp evidence_record(%SignalRecord{} = record) do
+    %{
+      signal_id: record.signal_id,
+      signal_type: record.signal_type,
+      capability_status: record.capability_status,
+      tensor_summary: record.tensor_summary,
+      metadata: record.metadata
+    }
+  end
 
   defp logits_values(%RouteLogits{} = logits) do
     [logits.agent_logits, logits.role_logits]

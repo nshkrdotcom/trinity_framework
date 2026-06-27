@@ -7,6 +7,11 @@ defmodule TrinityFrameworkDocsTest do
     guides/current_direction.md
     guides/system_architecture.md
     guides/crucible_path.md
+    guides/crucible_artifact_layout.md
+    guides/crucible_capability_degradation.md
+    guides/crucible_provider_boundary.md
+    guides/crucible_replay.md
+    guides/crucible_testing.md
     guides/service_buildout.md
     guides/operations_qc.md
     guides/artifact_distribution.md
@@ -37,8 +42,10 @@ defmodule TrinityFrameworkDocsTest do
 
   @expected_tasks ~w(
     trinity.artifact.fetch
+    trinity.crucible.capabilities
     trinity.crucible.inspect
     trinity.crucible.matrix_eval
+    trinity.crucible.replay
     trinity.demo
     trinity.env.check
     trinity.eval
@@ -70,7 +77,9 @@ defmodule TrinityFrameworkDocsTest do
     {"qwen eval", ["qwen_router_prompt_eval", "37-case"]},
     {"crucible path",
      [
+       "mix trinity.crucible.capabilities",
        "mix trinity.crucible.matrix_eval",
+       "mix trinity.crucible.replay",
        "mix trinity.eval qwen_router_prompt_eval"
      ]},
     {"python torch provider",

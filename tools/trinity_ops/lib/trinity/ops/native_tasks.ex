@@ -11,6 +11,7 @@ defmodule Trinity.Ops.NativeTasks do
   alias CrucibleFactorization.SVD
   alias CrucibleModelRegistry.Pins.{ArtifactPin, Fetcher, Verifier}
   alias CrucibleSignalTrace.Ingest, as: CrucibleTraceIngest
+  alias CrucibleSignalTrace.Validate, as: CrucibleTraceValidate
 
   alias SelfHostedInferenceBumblebee.{
     Extractor,
@@ -24,7 +25,7 @@ defmodule Trinity.Ops.NativeTasks do
   alias SelfHostedInferenceCore.CrucibleRuntime
   alias Trinity.Bridge.Trace.JsonlSink
   alias Trinity.Coordinator.TraceEvent
-  alias Trinity.Crucible.TraceAdapter
+  alias Trinity.Crucible.{ArtifactPaths, OperatorReport, RequestContext, TapPlanBuilder, TraceAdapter}
   alias Trinity.Ops.CommandSpec
   alias Trinity.Ops.EvalMetadata
   alias Trinity.RefSanitizer
@@ -50,8 +51,10 @@ defmodule Trinity.Ops.NativeTasks do
 
   @spec run(CommandSpec.task_key(), keyword()) :: :ok
   def run(:trinity_artifact_fetch, opts), do: artifact_fetch(opts)
+  def run(:trinity_crucible_capabilities, opts), do: crucible_capabilities(opts)
   def run(:trinity_crucible_inspect, opts), do: crucible_inspect(opts)
   def run(:trinity_crucible_matrix_eval, opts), do: crucible_matrix_eval(opts)
+  def run(:trinity_crucible_replay, opts), do: crucible_replay(opts)
   def run(:trinity_crucible_transcript, opts), do: crucible_transcript(opts)
   def run(:trinity_demo, opts), do: route_demo(opts)
   def run(:trinity_eval, opts), do: eval(opts)
@@ -106,6 +109,89 @@ defmodule Trinity.Ops.NativeTasks do
     end
 
     run_transcript_command(opts, command)
+  end
+
+  defp crucible_capabilities(opts) do
+    start_app!()
+
+    trace_path = require_regular_path!(opts, :trace)
+    trace = load_v4_trace!(trace_path)
+    paths = ArtifactPaths.new(root: v5_artifact_root(opts), trace_name: trace.trace_id) |> ArtifactPaths.ensure!()
+    out = Keyword.get(opts, :out) || ArtifactPaths.report_path(paths, "capabilities_#{safe_artifact_name(trace.trace_id)}.json")
+
+    payload = %{
+      trace_path: trace_path,
+      requires_live_provider?: false,
+      trace: TraceAdapter.summarize_trace(trace),
+      signals: TraceAdapter.summarize_signals(trace),
+      capabilities: TraceAdapter.summarize_capabilities(trace),
+      route_evidence: TraceAdapter.extract_route_evidence(trace),
+      generation_evidence: TraceAdapter.extract_generation_evidence(trace),
+      trajectory_evidence: TraceAdapter.extract_trajectory_evidence(trace)
+    }
+
+    report =
+      OperatorReport.new!(
+        schema: "trinity.crucible.capabilities.v1",
+        mode: :trace,
+        trace_id: trace.trace_id,
+        payload: payload,
+        summaries: Map.take(payload, [:trace, :signals, :capabilities]),
+        artifact_paths: %{report_path: out}
+      )
+      |> OperatorReport.to_map()
+
+    ArtifactIO.write_json!(out, normalize_for_json(report))
+    kv("Wrote capabilities report", out)
+    print_payload(report)
+    pass("TRINITY CRUCIBLE CAPABILITIES")
+  end
+
+  defp crucible_replay(opts) do
+    start_app!()
+
+    trace_path = require_regular_path!(opts, :trace)
+    trace = load_v4_trace!(trace_path)
+    decision = CruciblePolicyPlan.evaluate(trace)
+    paths = ArtifactPaths.new(root: v5_artifact_root(opts), trace_name: trace.trace_id) |> ArtifactPaths.ensure!()
+
+    artifact_paths =
+      persist_crucible_decision_artifacts(
+        :replay,
+        trace,
+        decision,
+        Keyword.put(opts, :artifact_suffix, Path.basename(trace_path))
+      )
+
+    out = Keyword.get(opts, :out) || ArtifactPaths.report_path(paths, "replay_#{safe_artifact_name(trace.trace_id)}.json")
+
+    payload =
+      :replay
+      |> crucible_v4_payload(trace, decision, trace_path)
+      |> Map.merge(%{
+        validation: validation_report(trace),
+        trace: TraceAdapter.summarize_trace(trace),
+        signals: TraceAdapter.summarize_signals(trace),
+        capabilities: TraceAdapter.summarize_capabilities(trace),
+        artifact_paths: Map.put(artifact_paths, :report_path, out)
+      })
+
+    report =
+      OperatorReport.new!(
+        schema: "trinity.crucible.replay.v1",
+        mode: :replay,
+        trace_id: trace.trace_id,
+        validation: payload.validation,
+        summaries: Map.take(payload, [:trace, :signals, :capabilities]),
+        payload: payload,
+        artifact_paths: payload.artifact_paths
+      )
+      |> OperatorReport.to_map()
+
+    ArtifactIO.write_json!(out, normalize_for_json(report))
+    kv("Wrote replay report", out)
+    print_payload(report)
+    pass("TRINITY CRUCIBLE REPLAY")
   end
 
   defp run_transcript_command(opts, command) do
@@ -396,8 +482,10 @@ defmodule Trinity.Ops.NativeTasks do
     {:ok, lease} = CrucibleRuntime.lease(pid, owner_ref: "trinity.crucible.inspect")
 
     try do
+      tap_plan = live_tap_plan(:live_inspect, prompt, opts)
+
       {:ok, trace} =
-        CrucibleRuntime.forward(pid, nil, %{prompt: prompt},
+        CrucibleRuntime.forward(pid, tap_plan, %{prompt: prompt},
           trace_name: trace_name,
           timeout: forward_timeout_ms
         )
@@ -657,9 +745,11 @@ defmodule Trinity.Ops.NativeTasks do
         |> Enum.with_index()
         |> Enum.map(fn {case_spec, index} ->
           trace_name = "#{run_tag}_#{index}"
+          prompt = case_prompt(case_spec)
+          tap_plan = live_tap_plan(:matrix_eval, prompt, opts, turn: index)
 
           {:ok, trace} =
-            CrucibleRuntime.forward(pid, nil, %{prompt: case_prompt(case_spec)},
+            CrucibleRuntime.forward(pid, tap_plan, %{prompt: prompt},
               trace_name: trace_name,
               timeout: forward_timeout_ms
             )
@@ -845,9 +935,10 @@ defmodule Trinity.Ops.NativeTasks do
     rows =
       Enum.map(1..repeats, fn index ->
         trace_name = "#{run_tag}_stability_#{index}"
+        tap_plan = live_tap_plan(:live_inspect, prompt, opts, turn: index)
 
         {:ok, trace} =
-          CrucibleRuntime.forward(pid, nil, %{prompt: prompt},
+          CrucibleRuntime.forward(pid, tap_plan, %{prompt: prompt},
             trace_name: trace_name,
             timeout: timeout
           )
@@ -941,6 +1032,31 @@ defmodule Trinity.Ops.NativeTasks do
     |> Enum.reject(fn {_key, value} -> is_nil(value) end)
   end
 
+  defp live_tap_plan(surface, prompt, opts, extra \\ []) do
+    runtime_profile = runtime_profile(Keyword.get(opts, :runtime_profile), :live)
+
+    context =
+      RequestContext.from_messages(initial_messages(prompt),
+        task_type: live_task_type(surface),
+        turn: Keyword.get(extra, :turn, 0),
+        runtime_profile: %{name: runtime_profile},
+        artifact_root: Keyword.get(opts, :artifact_root),
+        trace_out: Keyword.get(opts, :trace_out),
+        policy_id: "trinity:crucible:#{surface}"
+      )
+
+    case surface do
+      :matrix_eval -> TapPlanBuilder.matrix_eval_plan(context, %{name: runtime_profile})
+      :live_inspect -> TapPlanBuilder.live_inspect_plan(context, %{name: runtime_profile})
+      :generation_step -> TapPlanBuilder.generation_step_plan(context, %{name: runtime_profile})
+      _other -> TapPlanBuilder.route_decision_plan(context, %{name: runtime_profile})
+    end
+  end
+
+  defp live_task_type(:matrix_eval), do: :review
+  defp live_task_type(:live_inspect), do: :verification
+  defp live_task_type(_surface), do: :answer
+
   defp normalize_live_architecture(nil), do: nil
   defp normalize_live_architecture("base"), do: :base
 
@@ -1012,6 +1128,16 @@ defmodule Trinity.Ops.NativeTasks do
 
   @spec load_v4_trace!(String.t()) :: Crucible.ForwardTrace.t()
   defp load_v4_trace!(path), do: CrucibleTraceIngest.from_jsonl!(path, [])
+
+  defp validation_report(trace) do
+    %{
+      shape: validation_status(CrucibleTraceValidate.validate_forward_trace(trace, :shape)),
+      replay: validation_status(CrucibleTraceValidate.validate_forward_trace(trace, :replay))
+    }
+  end
+
+  defp validation_status(:ok), do: "ok"
+  defp validation_status({:error, reason}), do: inspect(reason)
 
   defp case_prompt(case_spec) do
     case_spec

@@ -26,6 +26,10 @@ defmodule Trinity.Ops.CommandSpec do
         switches: eval_switches(),
         positional: true
       },
+      trinity_crucible_capabilities: %{
+        task: "trinity.crucible.capabilities",
+        switches: crucible_trace_switches()
+      },
       trinity_crucible_inspect: %{
         task: "trinity.crucible.inspect",
         switches: crucible_switches()
@@ -33,6 +37,10 @@ defmodule Trinity.Ops.CommandSpec do
       trinity_crucible_matrix_eval: %{
         task: "trinity.crucible.matrix_eval",
         switches: crucible_matrix_switches()
+      },
+      trinity_crucible_replay: %{
+        task: "trinity.crucible.replay",
+        switches: crucible_trace_switches()
       },
       trinity_crucible_transcript: %{
         task: "trinity.crucible.transcript",
@@ -347,6 +355,15 @@ defmodule Trinity.Ops.CommandSpec do
       run_tag: :string,
       stability_repeats: :integer,
       stability_prompt: :string
+    ]
+  end
+
+  defp crucible_trace_switches do
+    [
+      artifact_root: :string,
+      trace: :string,
+      out: :string,
+      validation_level: :string
     ]
   end
 

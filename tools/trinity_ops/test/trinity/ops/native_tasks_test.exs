@@ -133,6 +133,56 @@ defmodule Trinity.Ops.NativeTasksTest do
     assert trace_events(trace) |> Enum.member?("crucible_forward_trace")
   end
 
+  test "crucible capabilities summarizes a fixture trace without live provider" do
+    trace_path = Path.join(__DIR__, "../../fixtures/crucible_minimal_forward_trace.jsonl")
+    out = tmp_path("crucible_capabilities.json")
+
+    assert :ok =
+             Tasks.run(:trinity_crucible_capabilities, [
+               "--trace",
+               trace_path,
+               "--out",
+               out
+             ])
+
+    report = Jason.decode!(File.read!(out))
+    assert report["schema"] == "trinity.crucible.capabilities.v1"
+    assert report["trace_id"] == "trace-fixture-minimal"
+    assert get_in(report, ["signals", "by_type", "final_logits"]) == 1
+    assert report["requires_live_provider?"] == false
+  end
+
+  test "crucible replay validates and replays a fixture trace through policy artifacts" do
+    trace_path = Path.join(__DIR__, "../../fixtures/crucible_minimal_forward_trace.jsonl")
+    root = tmp_path("crucible_v5")
+    out = tmp_path("crucible_replay.json")
+
+    assert :ok =
+             Tasks.run(:trinity_crucible_replay, [
+               "--trace",
+               trace_path,
+               "--artifact-root",
+               root,
+               "--out",
+               out
+             ])
+
+    report = Jason.decode!(File.read!(out))
+    assert report["schema"] == "trinity.crucible.replay.v1"
+    assert report["trace_id"] == "trace-fixture-minimal"
+    assert get_in(report, ["validation", "shape"]) == "ok"
+    assert is_binary(get_in(report, ["route_decision", "assigned_role"]))
+    assert File.regular?(get_in(report, ["artifact_paths", "policy_decision_path"]))
+    assert File.regular?(get_in(report, ["artifact_paths", "route_decision_path"]))
+  end
+
+  test "live Crucible runtime calls use negotiated tap plans" do
+    source = File.read!("tools/trinity_ops/lib/trinity/ops/native_tasks.ex")
+
+    refute String.contains?(source, "CrucibleRuntime.forward(pid, nil")
+    refute String.contains?(source, "CrucibleRuntime.forward(pid,\n          nil")
+  end
+
   test "crucible trace matrix expands directories and writes decision artifacts" do
     root = tmp_path("crucible_v5")
     trace_dir = tmp_path("trace_dir")

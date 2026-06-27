@@ -6,8 +6,10 @@ defmodule Trinity.Ops.CommandSpecTest do
 
   @expected_tasks ~w(
     trinity.artifact.fetch
+    trinity.crucible.capabilities
     trinity.crucible.inspect
     trinity.crucible.matrix_eval
+    trinity.crucible.replay
     trinity.crucible.transcript
     trinity.demo
     trinity.env.check
@@ -36,6 +38,12 @@ defmodule Trinity.Ops.CommandSpecTest do
 
   @sample_args %{
     trinity_artifact_fetch: ["--pin", "pin.json", "--dest", "artifact", "--offline"],
+    trinity_crucible_capabilities: [
+      "--trace",
+      "tools/trinity_ops/test/fixtures/crucible_minimal_forward_trace.jsonl",
+      "--out",
+      "tmp/capabilities.json"
+    ],
     trinity_crucible_inspect: ["--runtime-profile", "mock_tiny", "--message", "hello"],
     trinity_crucible_matrix_eval: [
       "--runtime-profile",
@@ -58,6 +66,12 @@ defmodule Trinity.Ops.CommandSpecTest do
       "elixir",
       "-e",
       "IO.puts(:ok)"
+    ],
+    trinity_crucible_replay: [
+      "--trace",
+      "tools/trinity_ops/test/fixtures/crucible_minimal_forward_trace.jsonl",
+      "--out",
+      "tmp/replay.json"
     ],
     trinity_demo: [],
     trinity_env_check: ["-a", "artifact", "-r", "cuda"],
