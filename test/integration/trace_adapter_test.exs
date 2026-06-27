@@ -9,6 +9,7 @@ defmodule TrinityFramework.Integration.TraceAdapterTest do
     DecisionAdapter,
     OperatorReport,
     RequestContext,
+    RuntimeProfile,
     TapPlanBuilder,
     TraceAdapter
   }
@@ -180,6 +181,27 @@ defmodule TrinityFramework.Integration.TraceAdapterTest do
       |> Enum.map(& &1.signal_spec.signal_type)
 
     assert :generation_step_logits in generation_types
+  end
+
+  test "RuntimeProfile carries Crucible operator runtime identity" do
+    profile =
+      RuntimeProfile.new(%{
+        "name" => "cuda_exla",
+        "provider_kind" => "elixir_bumblebee",
+        "model_id" => "Qwen/Qwen3-0.6B",
+        "artifact_ref" => "artifact:qwen3-0.6b-sakana",
+        "trajectory_layers" => [8, 16, 24],
+        "supported_capabilities" => ["final_logits"]
+      })
+
+    assert profile.name == "cuda_exla"
+    assert profile.provider_kind == "elixir_bumblebee"
+    assert profile.trajectory_layers == [8, 16, 24]
+
+    context = RequestContext.new(runtime_profile: profile, messages: [])
+    plan = TapPlanBuilder.trajectory_plan(context, profile)
+
+    assert plan.metadata.runtime_profile == "cuda_exla"
   end
 
   test "TraceAdapter exposes operator summaries and evidence extraction helpers" do

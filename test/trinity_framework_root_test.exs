@@ -150,6 +150,7 @@ defmodule TrinityFrameworkRootTest do
       Trinity.Crucible.ArtifactPaths,
       Trinity.Crucible.OperatorReport,
       Trinity.Crucible.RequestContext,
+      Trinity.Crucible.RuntimeProfile,
       Trinity.Crucible.TapPlanBuilder,
       Trinity.Crucible.TraceAdapter,
       Trinity.Crucible.DecisionAdapter,
