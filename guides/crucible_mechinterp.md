@@ -57,6 +57,14 @@ consume `CrucibleBumblebee.EMLXQwen3.provider_compatibility/1` for supported
 activation names, capture groups, KV-cache generation telemetry, and residual
 intervention support.
 
+The fork branch is kept in sync with `elixir-nx/emlx` main (merged through
+the fused kv_cache+sdpa PR, elixir-nx/emlx#124) for native compiler and NIF
+improvements, while keeping our own instrumented `EMLXAxon.Qwen3.{Model,
+Attention,Generate}` rather than upstream's independent, non-instrumented
+dense-generation path shipped under the same module names — see
+`crucible_bumblebee`'s `guides/emlx_qwen3.md` for the current pinned ref and
+rationale.
+
 The Trinity local task defaults stay on `tiny_gpt2` because they must run in CI
 without external model weights. A Qwen3 operator run should use the EMLX bridge
 once model weights are locally available, then feed the emitted trace into:
