@@ -21,22 +21,24 @@ defmodule Trinity.Crucible.OperatorReport do
   def new(attrs) when is_list(attrs) or is_map(attrs) do
     attrs = attrs_map(attrs)
 
-    with schema when is_binary(schema) and schema != "" <- field(attrs, :schema) do
-      {:ok,
-       %__MODULE__{
-         schema: schema,
-         mode: field(attrs, :mode),
-         ok: field(attrs, :ok, true),
-         trace_id: field(attrs, :trace_id),
-         generated_at: field(attrs, :generated_at, DateTime.utc_now()),
-         validation: field(attrs, :validation, %{}),
-         summaries: field(attrs, :summaries, %{}),
-         payload: field(attrs, :payload, %{}),
-         artifact_paths: field(attrs, :artifact_paths, %{}),
-         metadata: field(attrs, :metadata, %{})
-       }}
-    else
-      _value -> {:error, :missing_schema}
+    case field(attrs, :schema) do
+      schema when is_binary(schema) and schema != "" ->
+        {:ok,
+         %__MODULE__{
+           schema: schema,
+           mode: field(attrs, :mode),
+           ok: field(attrs, :ok, true),
+           trace_id: field(attrs, :trace_id),
+           generated_at: field(attrs, :generated_at, DateTime.utc_now()),
+           validation: field(attrs, :validation, %{}),
+           summaries: field(attrs, :summaries, %{}),
+           payload: field(attrs, :payload, %{}),
+           artifact_paths: field(attrs, :artifact_paths, %{}),
+           metadata: field(attrs, :metadata, %{})
+         }}
+
+      _value ->
+        {:error, :missing_schema}
     end
   end
 

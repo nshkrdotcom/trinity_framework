@@ -92,6 +92,7 @@ defmodule TrinityFramework.MixProject do
       dep(:crucible_tensor_patch),
       dep(:crucible_model_registry),
       dep(:crucible_mechinterp),
+      dep(:crucible_provider_contracts),
       dep(:crucible_signal),
       dep(:crucible_tap),
       dep(:crucible_signal_trace),

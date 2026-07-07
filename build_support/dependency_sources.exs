@@ -16,6 +16,7 @@ defmodule DependencySources do
     "crucible_factorization" => :crucible_factorization,
     "crucible_mechinterp" => :crucible_mechinterp,
     "crucible_model_registry" => :crucible_model_registry,
+    "crucible_provider_contracts" => :crucible_provider_contracts,
     "crucible_safetensors" => :crucible_safetensors,
     "crucible_tensor_patch" => :crucible_tensor_patch,
     "execution_plane" => :execution_plane,

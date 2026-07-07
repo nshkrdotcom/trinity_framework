@@ -46,7 +46,8 @@ defmodule Trinity.CoordinatorCore.MixProject do
       DependencySources.dep(:crucible_tap, @repo_root),
       DependencySources.dep(:crucible_policy, @repo_root),
       DependencySources.dep(:crucible_signal_trace, @repo_root),
-      DependencySources.dep(:outer_brain_context_abi, @repo_root)
+      DependencySources.dep(:outer_brain_context_abi, @repo_root),
+      {:jason, "~> 1.4"}
     ] ++ quality_deps()
   end
 

@@ -34,7 +34,8 @@ defmodule Trinity.Crucible.TapPlanBuilder do
     build_plan(:route_decision, context, runtime_profile, specs_for(context, runtime_profile))
   end
 
-  @spec live_inspect_plan(RequestContext.t() | keyword() | map(), keyword() | map()) :: TapPlan.t()
+  @spec live_inspect_plan(RequestContext.t() | keyword() | map(), keyword() | map()) ::
+          TapPlan.t()
   def live_inspect_plan(context, runtime_profile \\ []) do
     context = normalize_context(context)
 
@@ -67,7 +68,8 @@ defmodule Trinity.Crucible.TapPlanBuilder do
     ])
   end
 
-  @spec logit_summary_plan(RequestContext.t() | keyword() | map(), keyword() | map()) :: TapPlan.t()
+  @spec logit_summary_plan(RequestContext.t() | keyword() | map(), keyword() | map()) ::
+          TapPlan.t()
   def logit_summary_plan(context, runtime_profile \\ []) do
     context = normalize_context(context)
 
@@ -106,7 +108,9 @@ defmodule Trinity.Crucible.TapPlanBuilder do
   end
 
   defp normalize_context(%RequestContext{} = context), do: context
-  defp normalize_context(attrs) when is_list(attrs) or is_map(attrs), do: RequestContext.new(attrs)
+
+  defp normalize_context(attrs) when is_list(attrs) or is_map(attrs),
+    do: RequestContext.new(attrs)
 
   defp build_plan(surface, %RequestContext{} = context, runtime_profile, specs) do
     plan_id = "trinity:crucible:#{surface}:#{context.task_type}:turn:#{context.turn}"

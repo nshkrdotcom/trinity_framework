@@ -1078,14 +1078,11 @@ defmodule Trinity.Ops.NativeTasks do
     case surface do
       :matrix_eval -> TapPlanBuilder.matrix_eval_plan(context, %{name: runtime_profile})
       :live_inspect -> TapPlanBuilder.live_inspect_plan(context, %{name: runtime_profile})
-      :generation_step -> TapPlanBuilder.generation_step_plan(context, %{name: runtime_profile})
-      _other -> TapPlanBuilder.route_decision_plan(context, %{name: runtime_profile})
     end
   end
 
   defp live_task_type(:matrix_eval), do: :review
   defp live_task_type(:live_inspect), do: :verification
-  defp live_task_type(_surface), do: :answer
 
   defp normalize_live_architecture(nil), do: nil
   defp normalize_live_architecture("base"), do: :base

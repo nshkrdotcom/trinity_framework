@@ -200,10 +200,7 @@ defmodule Trinity.Crucible.RequestContext do
   defp message_content(_message), do: ""
 
   defp prompt_digest(messages) do
-    text =
-      messages
-      |> Enum.map(&message_content/1)
-      |> Enum.join("\n")
+    text = Enum.map_join(messages, "\n", &message_content/1)
 
     if text == "", do: nil, else: Digest.prefixed_text(text)
   end

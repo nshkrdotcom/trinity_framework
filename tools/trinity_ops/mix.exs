@@ -16,7 +16,7 @@ defmodule Trinity.Ops.MixProject do
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       aliases: aliases(),
-      dialyzer: [plt_add_deps: :apps_direct, plt_add_apps: [:mix, :nx]],
+      dialyzer: [plt_add_deps: :apps_direct, plt_add_apps: [:mix, :nx, :axon, :bumblebee]],
       docs: docs()
     ]
   end
@@ -53,6 +53,7 @@ defmodule Trinity.Ops.MixProject do
       dep(:crucible_mechinterp),
       dep(:crucible_policy),
       dep(:crucible_bumblebee),
+      dep(:crucible_signal),
       dep(:crucible_signal_trace),
       dep(:crucible_tap),
       dep(:self_hosted_inference_core),

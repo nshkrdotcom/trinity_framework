@@ -9,7 +9,7 @@ defmodule Trinity.Crucible.TraceAdapter do
   alias CrucibleTap.TapPlan
 
   alias Trinity.Coordinator.{RoleInjector, RouteLogits, TraceEvent}
-  alias Trinity.Crucible.RequestContext
+  alias Trinity.Crucible.{ArtifactPaths, RequestContext}
 
   @exla_backend_prefix "EXLA" <> ".Backend<"
 
@@ -181,7 +181,9 @@ defmodule Trinity.Crucible.TraceAdapter do
   end
 
   @spec extract_trajectory_evidence(ForwardTrace.t()) :: [map()]
-  def extract_trajectory_evidence(%ForwardTrace{layer_trajectory: %LayerTrajectory{} = trajectory}) do
+  def extract_trajectory_evidence(%ForwardTrace{
+        layer_trajectory: %LayerTrajectory{} = trajectory
+      }) do
     Enum.map(trajectory.points, fn point ->
       %{
         layer_index: Map.get(point, :layer_index),
@@ -194,7 +196,8 @@ defmodule Trinity.Crucible.TraceAdapter do
   def extract_trajectory_evidence(%ForwardTrace{}), do: []
 
   @spec render_operator_table(ForwardTrace.t() | map()) :: String.t()
-  def render_operator_table(%ForwardTrace{} = trace), do: trace |> summarize_trace() |> render_operator_table()
+  def render_operator_table(%ForwardTrace{} = trace),
+    do: trace |> summarize_trace() |> render_operator_table()
 
   def render_operator_table(summary) when is_map(summary) do
     rows = [
@@ -204,14 +207,12 @@ defmodule Trinity.Crucible.TraceAdapter do
       {"signals", Map.get(summary, :signal_count)}
     ]
 
-    rows
-    |> Enum.map(fn {label, value} -> "#{label}: #{value}" end)
-    |> Enum.join("\n")
+    Enum.map_join(rows, "\n", fn {label, value} -> "#{label}: #{value}" end)
   end
 
-  @spec write_artifact_index(Trinity.Crucible.ArtifactPaths.t(), [map()]) :: String.t()
-  def write_artifact_index(%Trinity.Crucible.ArtifactPaths{} = paths, entries),
-    do: Trinity.Crucible.ArtifactPaths.write_artifact_index!(paths, entries)
+  @spec write_artifact_index(ArtifactPaths.t(), [map()]) :: String.t()
+  def write_artifact_index(%ArtifactPaths{} = paths, entries),
+    do: ArtifactPaths.write_artifact_index!(paths, entries)
 
   defp request_context(%RequestContext{} = context, _opts), do: context
 
