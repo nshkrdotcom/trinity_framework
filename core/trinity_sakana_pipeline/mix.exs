@@ -42,7 +42,7 @@ defmodule Trinity.SakanaPipeline.MixProject do
     [
       {:trinity_contracts, path: "../trinity_contracts"},
       {:trinity_sakana_contracts, path: "../trinity_sakana_contracts"},
-      {:jason, "~> 1.4"},
+      {:jason, "~> 1.4.5"},
       dep(:crucible_safetensors),
       dep(:crucible_factorization),
       dep(:crucible_tensor_patch),
@@ -55,9 +55,9 @@ defmodule Trinity.SakanaPipeline.MixProject do
 
   defp quality_deps do
     [
-      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
-      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
-      {:ex_doc, "~> 0.40.1", only: [:dev, :test], runtime: false}
+      {:credo, "~> 1.7.19", only: [:dev, :test], runtime: false},
+      {:dialyxir, "~> 1.4.7", only: [:dev, :test], runtime: false},
+      {:ex_doc, "~> 0.40.3", only: [:dev, :test], runtime: false}
     ]
   end
 

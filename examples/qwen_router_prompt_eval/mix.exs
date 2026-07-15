@@ -43,15 +43,15 @@ defmodule Trinity.Examples.QwenRouterPromptEval.MixProject do
       {:trinity_bridge_trace, path: "../../bridges/trinity_bridge_trace"},
       {:trinity_single_node, path: "../../apps/trinity_single_node"},
       {:self_hosted_inference_bumblebee, path: "../../../self_hosted_inference_bumblebee"},
-      {:jason, "~> 1.4"}
+      {:jason, "~> 1.4.5"}
     ] ++ quality_deps()
   end
 
   defp quality_deps do
     [
-      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
-      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
-      {:ex_doc, "~> 0.40.1", only: [:dev, :test], runtime: false}
+      {:credo, "~> 1.7.19", only: [:dev, :test], runtime: false},
+      {:dialyxir, "~> 1.4.7", only: [:dev, :test], runtime: false},
+      {:ex_doc, "~> 0.40.3", only: [:dev, :test], runtime: false}
     ]
   end
 

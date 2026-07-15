@@ -47,15 +47,15 @@ defmodule Trinity.CoordinatorCore.MixProject do
       DependencySources.dep(:crucible_policy, @repo_root),
       DependencySources.dep(:crucible_signal_trace, @repo_root),
       DependencySources.dep(:outer_brain_context_abi, @repo_root),
-      {:jason, "~> 1.4"}
+      {:jason, "~> 1.4.5"}
     ] ++ quality_deps()
   end
 
   defp quality_deps do
     [
-      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
-      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
-      {:ex_doc, "~> 0.40.1", only: [:dev, :test], runtime: false}
+      {:credo, "~> 1.7.19", only: [:dev, :test], runtime: false},
+      {:dialyxir, "~> 1.4.7", only: [:dev, :test], runtime: false},
+      {:ex_doc, "~> 0.40.3", only: [:dev, :test], runtime: false}
     ]
   end
 

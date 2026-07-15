@@ -65,9 +65,9 @@ defmodule TrinityFramework.MixProject do
       [
         {:weld, "~> 0.8.2", only: [:dev, :test], runtime: false},
         {:blitz, "~> 0.3.0", runtime: false},
-        {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
-        {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
-        {:ex_doc, "~> 0.40.1", only: [:dev, :test], runtime: false},
+        {:credo, "~> 1.7.19", only: [:dev, :test], runtime: false},
+        {:dialyxir, "~> 1.4.7", only: [:dev, :test], runtime: false},
+        {:ex_doc, "~> 0.40.3", only: [:dev, :test], runtime: false},
 
         # Deconstructed Sub-packages
         {:trinity_contracts, path: "core/trinity_contracts"},
