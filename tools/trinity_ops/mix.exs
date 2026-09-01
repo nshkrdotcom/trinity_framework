@@ -1,11 +1,8 @@
-unless Code.ensure_loaded?(DependencySources) do
-  Code.require_file(Path.expand("../../build_support/dependency_sources.exs", __DIR__))
-end
+if bootstrap = System.get_env("MIX_WORKSPACE_OPS_BOOTSTRAP"), do: Code.require_file(bootstrap)
 
 defmodule Trinity.Ops.MixProject do
   use Mix.Project
 
-  @framework_root Path.expand("../..", __DIR__)
   @source_url "https://github.com/nshkrdotcom/trinity_framework"
 
   def project do
@@ -48,22 +45,26 @@ defmodule Trinity.Ops.MixProject do
        path: "../../bridges/trinity_bridge_self_hosted_inference"},
       {:trinity_bridge_inference, path: "../../bridges/trinity_bridge_inference"},
       {:trinity_bridge_trace, path: "../../bridges/trinity_bridge_trace"},
-      dep(:crucible_factorization),
-      dep(:crucible_model_registry),
-      dep(:crucible_mechinterp),
-      dep(:crucible_policy),
-      dep(:crucible_bumblebee),
-      dep(:crucible_signal),
-      dep(:crucible_signal_trace),
-      dep(:crucible_tap),
-      dep(:self_hosted_inference_core),
-      dep(:self_hosted_inference_bumblebee),
+      workspace_dep({:crucible_factorization, "~> 0.1.0"}),
+      workspace_dep({:crucible_model_registry, "~> 0.3.1"}),
+      workspace_dep({:crucible_mechinterp, "~> 0.1.0"}),
+      workspace_dep({:crucible_policy, "~> 0.1.0"}),
+      workspace_dep({:crucible_bumblebee, "~> 0.1.0"}),
+      workspace_dep({:crucible_signal, "~> 0.1.0"}),
+      workspace_dep({:crucible_signal_trace, "~> 0.1.0"}),
+      workspace_dep({:crucible_tap, "~> 0.1.0"}),
+      workspace_dep({:self_hosted_inference_core, "~> 0.1.0"}),
+      workspace_dep({:self_hosted_inference_bumblebee, "~> 0.1.0"}),
       {:hf_hub, "~> 0.3.1"},
       {:jason, "~> 1.4.5"}
     ] ++ quality_deps()
   end
 
-  defp dep(app, opts \\ []), do: DependencySources.dep(app, @framework_root, opts)
+  defp workspace_dep(committed) do
+    if function_exported?(MixWorkspaceOpsBootstrap, :dep, 2),
+      do: apply(MixWorkspaceOpsBootstrap, :dep, [committed, __DIR__]),
+      else: committed
+  end
 
   defp quality_deps do
     [

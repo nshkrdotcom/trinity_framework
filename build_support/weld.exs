@@ -5,39 +5,26 @@ defmodule TrinityFramework.Build.WeldContract do
 
   alias TrinityFramework.Build.WorkspaceContract
 
-  @repo_root Path.expand("..", __DIR__)
-
   @manifest_dependencies [
-    :crucible_safetensors,
-    :crucible_factorization,
-    :crucible_tensor_patch,
-    :crucible_model_registry,
-    :crucible_mechinterp,
-    :crucible_provider_contracts,
-    :crucible_signal,
-    :crucible_tap,
-    :crucible_signal_trace,
-    :crucible_bumblebee,
-    :crucible_policy,
-    :self_hosted_inference_core,
-    :self_hosted_inference_bumblebee,
-    :execution_plane,
-    :execution_plane_process,
-    :inference,
-    :outer_brain_context_abi,
-    :aitrace
+    crucible_safetensors: [requirement: "~> 0.1.0", opts: []],
+    crucible_factorization: [requirement: "~> 0.1.0", opts: []],
+    crucible_tensor_patch: [requirement: "~> 0.1.0", opts: []],
+    crucible_model_registry: [requirement: "~> 0.3.1", opts: []],
+    crucible_mechinterp: [requirement: "~> 0.1.0", opts: [override: true]],
+    crucible_provider_contracts: [requirement: "~> 0.1.0", opts: [override: true]],
+    crucible_signal: [requirement: "~> 0.1.0", opts: [override: true]],
+    crucible_tap: [requirement: "~> 0.1.0", opts: [override: true]],
+    crucible_signal_trace: [requirement: "~> 0.1.0", opts: [override: true]],
+    crucible_bumblebee: [requirement: "~> 0.1.0", opts: [override: true]],
+    crucible_policy: [requirement: "~> 0.1.0", opts: [override: true]],
+    self_hosted_inference_core: [requirement: "~> 0.1.0", opts: []],
+    self_hosted_inference_bumblebee: [requirement: "~> 0.1.0", opts: []],
+    execution_plane: [requirement: "~> 0.1.0", opts: []],
+    execution_plane_process: [requirement: "~> 0.1.0", opts: []],
+    inference: [requirement: "~> 0.1.0", opts: []],
+    outer_brain_context_abi: [requirement: "~> 0.1.0", opts: [override: true]],
+    aitrace: [requirement: "~> 0.1.0", opts: []]
   ]
-
-  @manifest_dependency_opts %{
-    crucible_bumblebee: [override: true],
-    crucible_mechinterp: [override: true],
-    crucible_policy: [override: true],
-    crucible_provider_contracts: [override: true],
-    crucible_signal: [override: true],
-    crucible_signal_trace: [override: true],
-    crucible_tap: [override: true],
-    outer_brain_context_abi: [override: true]
-  }
 
   @artifact_docs [
     "README.md",
@@ -104,7 +91,7 @@ defmodule TrinityFramework.Build.WeldContract do
       publication: [
         internal_only: ["."]
       ],
-      dependencies: dependencies(),
+      dependencies: @manifest_dependencies,
       artifacts: [
         trinity_framework: artifact()
       ]
@@ -130,41 +117,6 @@ defmodule TrinityFramework.Build.WeldContract do
         hex_publish: false
       ]
     ]
-  end
-
-  defp dependencies do
-    Enum.map(@manifest_dependencies, fn app ->
-      {app, manifest_dependency(app)}
-    end)
-  end
-
-  defp manifest_dependency(app) do
-    config = Map.fetch!(dependency_configs(), app)
-    github = Map.fetch!(config, :github)
-    extra_opts = Map.get(@manifest_dependency_opts, app, [])
-
-    [opts: Keyword.merge(github_opts(github), extra_opts)]
-  end
-
-  defp dependency_configs do
-    {config, _binding} =
-      @repo_root
-      |> Path.join("build_support/dependency_sources.config.exs")
-      |> Code.eval_file()
-
-    Map.new(config[:deps], fn {app, dep_config} -> {app, Map.new(dep_config)} end)
-  end
-
-  defp github_opts(github) do
-    github = Map.new(github)
-    repo = Map.fetch!(github, :repo)
-
-    opts =
-      github
-      |> Map.take([:branch, :ref, :tag, :subdir])
-      |> Enum.sort_by(fn {key, _value} -> key end)
-
-    Keyword.merge([github: repo], opts)
   end
 end
 

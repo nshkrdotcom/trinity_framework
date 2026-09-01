@@ -8,7 +8,8 @@ deconstructed architecture assembled from the root Mix project.
 The root project owns assembly:
 
 - local path deps for all framework packages;
-- external runtime deps through `build_support/dependency_sources.config.exs`;
+- external runtime deps through portable committed tuples, with optional source
+  substitution through the Mix Workspace Ops bootstrap seam;
 - root `mix test`, `mix ci`, docs, and Weld packaging;
 - all `mix trinity.*` operator commands through `tools/trinity_ops`.
 

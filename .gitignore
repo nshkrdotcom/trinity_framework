@@ -5,7 +5,6 @@
 /examples/*/tmp/
 /dist/
 /tmp/
-/.dependency_sources.local.exs
 /*.ez
 /erl_crash.dump
 /cover/

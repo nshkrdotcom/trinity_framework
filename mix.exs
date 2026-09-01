@@ -1,6 +1,4 @@
-unless Code.ensure_loaded?(DependencySources) do
-  Code.require_file("build_support/dependency_sources.exs", __DIR__)
-end
+if bootstrap = System.get_env("MIX_WORKSPACE_OPS_BOOTSTRAP"), do: Code.require_file(bootstrap)
 
 Code.require_file("build_support/workspace_contract.exs", __DIR__)
 
@@ -87,28 +85,32 @@ defmodule TrinityFramework.MixProject do
 
   defp external_deps do
     [
-      dep(:crucible_safetensors),
-      dep(:crucible_factorization),
-      dep(:crucible_tensor_patch),
-      dep(:crucible_model_registry),
-      dep(:crucible_mechinterp),
-      dep(:crucible_provider_contracts),
-      dep(:crucible_signal),
-      dep(:crucible_tap),
-      dep(:crucible_signal_trace),
-      dep(:crucible_bumblebee),
-      dep(:crucible_policy),
-      dep(:self_hosted_inference_core),
-      dep(:self_hosted_inference_bumblebee),
-      dep(:execution_plane),
-      dep(:execution_plane_process),
-      dep(:inference),
-      dep(:outer_brain_context_abi),
-      dep(:aitrace)
+      workspace_dep({:crucible_safetensors, "~> 0.1.0", override: true}),
+      workspace_dep({:crucible_factorization, "~> 0.1.0", override: true}),
+      workspace_dep({:crucible_tensor_patch, "~> 0.1.0", override: true}),
+      workspace_dep({:crucible_model_registry, "~> 0.3.1", override: true}),
+      workspace_dep({:crucible_mechinterp, "~> 0.1.0", override: true}),
+      workspace_dep({:crucible_provider_contracts, "~> 0.1.0", override: true}),
+      workspace_dep({:crucible_signal, "~> 0.1.0", override: true}),
+      workspace_dep({:crucible_tap, "~> 0.1.0", override: true}),
+      workspace_dep({:crucible_signal_trace, "~> 0.1.0", override: true}),
+      workspace_dep({:crucible_bumblebee, "~> 0.1.0", override: true}),
+      workspace_dep({:crucible_policy, "~> 0.1.0", override: true}),
+      workspace_dep({:self_hosted_inference_core, "~> 0.1.0", override: true}),
+      workspace_dep({:self_hosted_inference_bumblebee, "~> 0.1.0", override: true}),
+      workspace_dep({:execution_plane, "~> 0.1.0", override: true}),
+      workspace_dep({:execution_plane_process, "~> 0.1.0", override: true}),
+      workspace_dep({:inference, "~> 0.1.0", override: true}),
+      workspace_dep({:outer_brain_context_abi, "~> 0.1.0", override: true}),
+      workspace_dep({:aitrace, "~> 0.1.0", override: true})
     ]
   end
 
-  defp dep(app), do: DependencySources.dep(app, __DIR__, override: true)
+  defp workspace_dep(committed) do
+    if function_exported?(MixWorkspaceOpsBootstrap, :dep, 2),
+      do: apply(MixWorkspaceOpsBootstrap, :dep, [committed, __DIR__]),
+      else: committed
+  end
 
   defp aliases do
     monorepo_aliases = [

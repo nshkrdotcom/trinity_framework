@@ -8,17 +8,13 @@ Runtime code, tests, examples, build helpers, generators, and checked-in
 generated code must remain regex-free, dynamic-atom-free, and ambient-env-free.
 Use fixed-string scans and structured validators.
 
-This repo is an existing Weld consumer. Keep Weld on the current published Hex
-line, `{:weld, "~> 0.8.2", only: [:dev, :test], runtime: false}`, and do not
-replace it with a path dependency in committed steady state.
-Weld checks helper drift, dependency-source manifests, clone/publish checks, and
-publish order for this repo.
+This repo is an existing Weld consumer. Keep Weld as a normal published Hex
+dependency and do not replace it with a committed path dependency.
 
-Dependency source selection is owned by
-`build_support/dependency_sources.exs` and
-`build_support/dependency_sources.config.exs`. Use
-`.dependency_sources.local.exs` only for local uncommitted overrides; dependency
-source selection must not use environment variables.
+Committed dependency tuples are the standalone defaults. Mix Workspace Ops may
+replace only their source coordinates through its tuple-first bootstrap seam;
+do not add repository-local source resolvers, machine paths, or ambient source
+selection variables.
 
 Runtime application code under `lib/**`, examples, Mix tasks, and SDK helpers
 must not call direct OS environment APIs such as `System.get_env/1`,

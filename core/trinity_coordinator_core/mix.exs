@@ -1,11 +1,8 @@
-unless Code.ensure_loaded?(DependencySources) do
-  Code.require_file("../../build_support/dependency_sources.exs", __DIR__)
-end
+if bootstrap = System.get_env("MIX_WORKSPACE_OPS_BOOTSTRAP"), do: Code.require_file(bootstrap)
 
 defmodule Trinity.CoordinatorCore.MixProject do
   use Mix.Project
 
-  @repo_root Path.expand("../..", __DIR__)
   @source_url "https://github.com/nshkrdotcom/trinity_framework"
 
   def project do
@@ -42,13 +39,19 @@ defmodule Trinity.CoordinatorCore.MixProject do
     [
       {:trinity_contracts, path: "../trinity_contracts"},
       {:trinity_sakana_contracts, path: "../trinity_sakana_contracts"},
-      DependencySources.dep(:crucible_signal, @repo_root),
-      DependencySources.dep(:crucible_tap, @repo_root),
-      DependencySources.dep(:crucible_policy, @repo_root),
-      DependencySources.dep(:crucible_signal_trace, @repo_root),
-      DependencySources.dep(:outer_brain_context_abi, @repo_root),
+      workspace_dep({:crucible_signal, "~> 0.1.0"}),
+      workspace_dep({:crucible_tap, "~> 0.1.0"}),
+      workspace_dep({:crucible_policy, "~> 0.1.0"}),
+      workspace_dep({:crucible_signal_trace, "~> 0.1.0"}),
+      workspace_dep({:outer_brain_context_abi, "~> 0.1.0"}),
       {:jason, "~> 1.4.5"}
     ] ++ quality_deps()
+  end
+
+  defp workspace_dep(committed) do
+    if function_exported?(MixWorkspaceOpsBootstrap, :dep, 2),
+      do: apply(MixWorkspaceOpsBootstrap, :dep, [committed, __DIR__]),
+      else: committed
   end
 
   defp quality_deps do

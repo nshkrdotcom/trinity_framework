@@ -6,7 +6,8 @@ through dependency source manifests.
 
 ## Current Rule
 
-- Keep dependency source selection in `build_support/dependency_sources.config.exs`.
+- Keep the portable Hex tuple as the committed default; use Mix Workspace Ops
+  for operator-selected local or Git source substitution.
 - Use path or GitHub sources only through that manifest.
 - Publish mode must resolve package dependencies through Hex where configured.
 
